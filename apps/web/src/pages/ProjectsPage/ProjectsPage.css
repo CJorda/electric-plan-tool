@@ -1,0 +1,116 @@
+.projects {
+  margin: 20px 24px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.projects__header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.projects__header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.projects__placeholder {
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  text-align: center;
+  background: var(--panel-strong);
+  color: var(--text);
+}
+
+.projects__placeholder h3 {
+  margin: 0 0 8px;
+}
+
+.projects__placeholder p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.projects__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.projects__label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.projects__label input,
+.projects__label select,
+.projects__label textarea {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.projects__label--full {
+  grid-column: 1 / -1;
+}
+
+.projects__action {
+  grid-column: 1 / -1;
+  justify-self: start;
+  background: var(--accent-strong);
+  color: #0b0f1a;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.projects__status {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.projects__status--error {
+  color: #fecaca;
+}
+
+.projects__list {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.projects__card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.projects__meta {
+  font-size: 12px;
+  color: var(--muted);
+}

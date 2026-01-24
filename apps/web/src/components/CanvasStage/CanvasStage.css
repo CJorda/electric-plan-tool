@@ -1,0 +1,136 @@
+.canvas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px;
+  gap: 16px;
+}
+
+.canvas__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.canvas__mode {
+  font-size: 13px;
+}
+
+.canvas__help {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.canvas__hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.canvas__edit {
+  background: var(--panel-strong);
+  color: var(--text);
+  border: none;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.canvas__stage {
+  flex: 1;
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 23px,
+      rgba(30, 41, 59, 0.4) 24px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 23px,
+      rgba(30, 41, 59, 0.4) 24px
+    );
+  display: grid;
+  place-items: center;
+  min-height: 480px;
+  position: relative;
+}
+
+.canvas__svg {
+  width: 100%;
+  height: 100%;
+}
+
+.canvas__placeholder {
+  text-align: center;
+  max-width: 420px;
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.45);
+}
+
+.canvas__placeholder-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.canvas__actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.canvas__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-strong);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.canvas__tooltip {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.95);
+  color: #f8fafc;
+  padding: 12px 14px;
+  border-radius: 14px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.25);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  backdrop-filter: blur(6px);
+}
+
+.canvas__tooltip-title {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.canvas__tooltip-row {
+  color: #e2e8f0;
+}
+
+.cable__label {
+  cursor: pointer;
+}

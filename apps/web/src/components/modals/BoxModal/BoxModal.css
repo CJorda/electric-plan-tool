@@ -1,0 +1,156 @@
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  z-index: 20;
+}
+
+.modal__content {
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 640px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal__close {
+  background: var(--panel-strong);
+  border: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.modal__label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.modal__label input,
+.modal__label select {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  background: var(--panel-strong);
+  color: var(--text);
+}
+
+.modal__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.modal__primary {
+  background: var(--accent-strong);
+  color: #ffffff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.modal__primary:disabled {
+  background: rgba(14, 165, 233, 0.4);
+  cursor: not-allowed;
+}
+
+.modal__danger {
+  background: rgba(248, 113, 113, 0.2);
+  color: #fca5a5;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.modal__list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.modal__list-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.modal__list-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.modal__list-actions button {
+  border: none;
+  background: transparent;
+  color: #f87171;
+  cursor: pointer;
+}
+
+.modal__empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.modal__hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.modal__tile {
+  border: 1px solid var(--border);
+  background: var(--panel-strong);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.modal__error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modal__error {
+  color: #f87171;
+  font-size: 12px;
+  margin: 0;
+}
