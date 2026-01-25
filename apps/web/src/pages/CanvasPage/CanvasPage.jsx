@@ -39,6 +39,10 @@ function CanvasPage({
   onToggleComponentDiscount,
   onUpdateComponentCustomerDiscount,
   onToggleComponentActive,
+  projectStatus,
+  onProjectStatusChange,
+  statusOptions,
+  statusLabels,
 }) {
   if (hideCanvas) return null;
 
@@ -183,39 +187,52 @@ function CanvasPage({
   }
 
   return (
-    <CanvasStage
-      svgRef={svgRef}
-      pan={pan}
-      zoom={zoom}
-      backgroundImage={backgroundImage}
-      boxes={boxes}
-      cables={cables}
-      devices={devices}
-      selectedBoxId={selectedBoxId}
-      selectedDeviceId={selectedDeviceId}
-      draftCable={draftCable}
-      draftPolyline={draftPolyline}
-      tooltip={tooltip}
-      activeModeLabel={activeModeLabel}
-      helpMessage={helpMessage}
-      onCanvasClick={onCanvasClick}
-      onWheel={onWheel}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onBoxPointerDown={onBoxPointerDown}
-      onDevicePointerDown={onDevicePointerDown}
-      onDeviceDoubleClick={onDeviceDoubleClick}
-      onBoxDoubleClick={onBoxDoubleClick}
-      onBoxPointerMove={onBoxPointerMove}
-      onBoxPointerLeave={onBoxPointerLeave}
-      onDeleteCable={onDeleteCable}
-      renderCablePoints={renderCablePoints}
-      renderCableLabelPosition={renderCableLabelPosition}
-      renderBoxLabel={renderBoxLabel}
-      onEditSelected={onEditSelected}
-      onTogglePartsList={onTogglePartsList}
-    />
+    <div className="canvas__header-status">
+      <span className={`projects__status-pill projects__status-pill--${projectStatus}`}>{statusLabels[projectStatus] ?? projectStatus}</span>
+      <label className="projects__status-select" style={{marginLeft: 12}}>
+        <select
+          value={projectStatus}
+          onChange={e => onProjectStatusChange(e.target.value)}
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </label>
+      <CanvasStage
+        svgRef={svgRef}
+        pan={pan}
+        zoom={zoom}
+        backgroundImage={backgroundImage}
+        boxes={boxes}
+        cables={cables}
+        devices={devices}
+        selectedBoxId={selectedBoxId}
+        selectedDeviceId={selectedDeviceId}
+        draftCable={draftCable}
+        draftPolyline={draftPolyline}
+        tooltip={tooltip}
+        activeModeLabel={activeModeLabel}
+        helpMessage={helpMessage}
+        onCanvasClick={onCanvasClick}
+        onWheel={onWheel}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onBoxPointerDown={onBoxPointerDown}
+        onDevicePointerDown={onDevicePointerDown}
+        onDeviceDoubleClick={onDeviceDoubleClick}
+        onBoxDoubleClick={onBoxDoubleClick}
+        onBoxPointerMove={onBoxPointerMove}
+        onBoxPointerLeave={onBoxPointerLeave}
+        onDeleteCable={onDeleteCable}
+        renderCablePoints={renderCablePoints}
+        renderCableLabelPosition={renderCableLabelPosition}
+        renderBoxLabel={renderBoxLabel}
+        onEditSelected={onEditSelected}
+        onTogglePartsList={onTogglePartsList}
+      />
+    </div>
   );
 }
 

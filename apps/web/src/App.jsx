@@ -36,6 +36,21 @@ const DEFAULT_COMPONENT_FORM = {
   unitPrice: 0,
 };
 
+const STATUS_OPTIONS = [
+  { value: "draft", label: "borrador" },
+  { value: "confirmed", label: "confirmado" },
+  { value: "published", label: "publicado" },
+  { value: "archived", label: "archivado" },
+];
+
+const STATUS_LABELS = {
+  draft: "borrador",
+  confirmed: "confirmado",
+  published: "publicado",
+  archived: "archivado",
+  local: "local",
+};
+
 function App() {
   const [activeMode, setActiveMode] = useState("select");
   const [activeSection, setActiveSection] = useState("Catálogo");
@@ -45,6 +60,7 @@ function App() {
   const [isProjectDesignMode, setIsProjectDesignMode] = useState(false);
   const [activeProjectId, setActiveProjectId] = useState(null);
   const [isBoxModalOpen, setIsBoxModalOpen] = useState(false);
+  const [activeProjectStatus, setActiveProjectStatus] = useState("draft");
   const [isCableModalOpen, setIsCableModalOpen] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isSizeModalOpen, setIsSizeModalOpen] = useState(false);
@@ -613,8 +629,9 @@ function App() {
         <ProjectsPage
           isProjectsSection={isProjectsSection && !isProjectDesignMode}
           activeSubsection={activeSubsection}
-          onOpenDesigner={(projectId) => {
+          onOpenDesigner={(projectId, status) => {
             setActiveProjectId(projectId);
+            setActiveProjectStatus(status || "draft");
             setIsProjectDesignMode(true);
             setActiveMode("select");
           }}
@@ -622,40 +639,44 @@ function App() {
             setActiveSection("Proyectos");
             setActiveSubsection("Listado");
             setOpenSection("Proyectos");
-          }}
-        />
-
-        <CanvasPage
-          hideCanvas={hideToolbar}
-          svgRef={svgRef}
-          pan={pan}
-          zoom={zoom}
-          backgroundImage={backgroundImage}
-          boxes={boxes}
-          cables={cables}
-          devices={devices}
-          selectedBoxId={selectedBoxId}
-          selectedDeviceId={selectedDeviceId}
-          draftCable={draftCable}
-          draftPolyline={draftPolyline}
-          tooltip={tooltip}
-          activeModeLabel={MODES.find((m) => m.id === activeMode)?.label || ""}
-          helpMessage={helpMessage}
-          onCanvasClick={handleCanvasClick}
-          onWheel={handleWheel}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onBoxPointerDown={handleBoxPointerDown}
-          onDevicePointerDown={handleDevicePointerDown}
-          onDeviceDoubleClick={handleDeviceDoubleClick}
-          onBoxDoubleClick={handleBoxDoubleClick}
-          onBoxPointerMove={handleBoxPointerMove}
-          onBoxPointerLeave={handleBoxPointerLeave}
-          onDeleteCable={handleDeleteCable}
-          renderCablePoints={renderCablePoints}
-          renderCableLabelPosition={renderCableLabelPosition}
-          renderBoxLabel={(box) => {
+          <CanvasPage
+            hideCanvas={hideToolbar}
+            svgRef={svgRef}
+            pan={pan}
+            zoom={zoom}
+            backgroundImage={backgroundImage}
+            boxes={boxes}
+            cables={cables}
+            devices={devices}
+            selectedBoxId={selectedBoxId}
+            selectedDeviceId={selectedDeviceId}
+            draftCable={draftCable}
+            draftPolyline={draftPolyline}
+            tooltip={tooltip}
+            activeModeLabel={MODES.find((m) => m.id === activeMode)?.label || ""}
+            helpMessage={helpMessage}
+            onCanvasClick={handleCanvasClick}
+            onWheel={handleWheel}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onBoxPointerDown={handleBoxPointerDown}
+            onDevicePointerDown={handleDevicePointerDown}
+            onDeviceDoubleClick={handleDeviceDoubleClick}
+            onBoxDoubleClick={onBoxDoubleClick}
+            onBoxPointerMove={onBoxPointerMove}
+            onBoxPointerLeave={onBoxPointerLeave}
+            onDeleteCable={handleDeleteCable}
+            renderCablePoints={renderCablePoints}
+            renderCableLabelPosition={renderCableLabelPosition}
+            renderBoxLabel={renderBoxLabel}
+            onEditSelected={onEditSelected}
+            onTogglePartsList={onTogglePartsList}
+            projectStatus={activeProjectStatus}
+            onProjectStatusChange={setActiveProjectStatus}
+            statusOptions={STATUS_OPTIONS}
+            statusLabels={STATUS_LABELS}
+          />
             const total = box.components.reduce((sum, component) => sum + component.total, 0);
             const nameMaxChars = Math.max(6, Math.floor(box.width / 9));
             const nameText = truncateText(box.name, nameMaxChars);

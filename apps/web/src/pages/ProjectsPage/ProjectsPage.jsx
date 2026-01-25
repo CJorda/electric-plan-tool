@@ -25,6 +25,36 @@ function ProjectsPage({
   });
   const [deleteCandidate, setDeleteCandidate] = useState(null);
 
+  const statusOptions = [
+    { value: "draft", label: "borrador" },
+    { value: "confirmed", label: "confirmado" },
+    { value: "published", label: "publicado" },
+    { value: "archived", label: "archivado" },
+  ];
+
+  const statusLabels = {
+    draft: "borrador",
+    confirmed: "confirmado",
+    published: "publicado",
+    archived: "archivado",
+    local: "local",
+  };
+
+  const getNextStatus = (current) => {
+    switch (current) {
+      case "draft":
+        return { next: "confirmed", label: "Confirmar" };
+      case "confirmed":
+        return { next: "published", label: "Publicar" };
+      case "published":
+        return { next: "archived", label: "Archivar" };
+      case "archived":
+        return { next: "draft", label: "Reactivar" };
+      default:
+        return null;
+    }
+  };
+
   const isList = activeSubsection === "Listado";
   const isNew = activeSubsection === "Nuevo";
 
@@ -193,6 +223,33 @@ function ProjectsPage({
     }
   };
 
+  const handleUpdateStatus = async (project, status) => {
+    if (!project || !status || project.status === status) return;
+    if (project.status === "local") return;
+    if (!apiEnabled) {
+      setError("API no disponible para actualizar el estado.");
+      return;
+    }
+    setError("");
+    try {
+      const response = await fetch(`/api/projects/${project.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: project.name,
+          type: project.type,
+          notes: project.notes ?? "",
+          status,
+        }),
+      });
+      if (!response.ok) throw new Error("Error actualizando estado");
+      const updated = await response.json();
+      setProjects((prev) => prev.map((item) => (item.id === project.id ? updated : item)));
+    } catch (err) {
+      setError("No se pudo actualizar el estado.");
+    }
+  };
+
   if (!isProjectsSection) return null;
 
   const formatDate = (value) => {
@@ -229,18 +286,39 @@ function ProjectsPage({
                   <div className="projects__info">
                     <div className="projects__title-row">
                       <strong className="projects__name">{project.name}</strong>
-                      <span className="projects__price">
-                        €{Number(projectTotals[project.id] ?? 0).toFixed(2)}
+                      <span className={`projects__status-pill projects__status-pill--${project.status}`}>
+                        {statusLabels[project.status] ?? project.status}
                       </span>
                     </div>
                     <div className="projects__meta">
-                      {project.type} · {project.status === "local" ? "local" : project.status}
+                      <span>{project.type}</span>
+                      {project.created_at && <span>· Creado: {formatDate(project.created_at)}</span>}
                     </div>
-                    {project.created_at && (
-                      <div className="projects__meta">Creado: {formatDate(project.created_at)}</div>
-                    )}
+                  </div>
+                  <div className="projects__summary">
+                    <span className="projects__badge" aria-label="Total estimado">
+                      <span className="projects__badge-price">
+                        €{Number(projectTotals[project.id] ?? 0).toFixed(2)}
+                      </span>
+                      <span className="projects__badge-label">Total estimado</span>
+                    </span>
                   </div>
                   <div className="projects__actions">
+                    {project.status !== "local" && (
+                      <label className="projects__status-select">
+                        Estado
+                        <select
+                          value={project.status}
+                          onChange={(event) => handleUpdateStatus(project, event.target.value)}
+                        >
+                          {statusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <button
                       className="projects__action"
                       type="button"

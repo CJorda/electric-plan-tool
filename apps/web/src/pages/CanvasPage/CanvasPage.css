@@ -1,0 +1,9 @@
+/* Header de estado del proyecto en el editor */
+.canvas__header-status {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 16px 24px 0 24px;
+	background: var(--panel);
+	z-index: 2;
+}

@@ -4,16 +4,16 @@
 
 :root {
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-  color: #e2e8f0;
-  background-color: #0b0f1a;
-  --bg: #1f2937;
-  --panel: #2b3646;
-  --panel-strong: #334157;
-  --border: #475569;
-  --text: #f8fafc;
-  --muted: #d1d5db;
-  --accent: #e5e7eb;
-  --accent-strong: #ffffff;
+  color: #e5e7eb;
+  background-color: #1f2937;
+  --bg: #2a3342;
+  --panel: #343e4f;
+  --panel-strong: #3e495d;
+  --border: #586277;
+  --text: #f1f5f9;
+  --muted: #cbd5e1;
+  --accent: #e2e8f0;
+  --accent-strong: #f8fafc;
   --danger: #fecaca;
 }
 
