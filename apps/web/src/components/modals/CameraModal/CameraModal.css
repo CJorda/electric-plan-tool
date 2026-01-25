@@ -1,0 +1,5 @@
+@import "../BoxModal/BoxModal.css";
+
+.modal--camera .modal__content {
+  max-width: 520px;
+}

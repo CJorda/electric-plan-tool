@@ -1,1 +1,87 @@
 @import "../ProductsSection/ProductsSection.css";
+
+.products__table-head--categories,
+.products__table-row--categories {
+	grid-template-columns: 1fr 2fr auto;
+}
+
+.categories__delete {
+	border: 1px solid rgba(248, 113, 113, 0.5);
+	background: transparent;
+	color: #fecaca;
+	border-radius: 10px;
+	padding: 8px 12px;
+	cursor: pointer;
+	font-weight: 600;
+	justify-self: end;
+}
+
+.categories__save {
+	border: 1px solid var(--border);
+	background: var(--panel-strong);
+	color: var(--text);
+	border-radius: 10px;
+	padding: 8px 12px;
+	cursor: pointer;
+	font-weight: 600;
+	justify-self: end;
+}
+
+.categories__modal-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(2, 6, 23, 0.7);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	z-index: 30;
+}
+
+.categories__modal {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 16px;
+	padding: 20px;
+	max-width: 420px;
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.categories__modal h3 {
+	margin: 0;
+}
+
+.categories__modal p {
+	margin: 0;
+	color: var(--muted);
+	font-size: 13px;
+}
+
+.categories__modal-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+}
+
+.categories__modal-cancel {
+	background: transparent;
+	border: 1px solid var(--border);
+	color: var(--text);
+	border-radius: 10px;
+	padding: 8px 12px;
+	cursor: pointer;
+	font-weight: 600;
+}
+
+.categories__modal-confirm {
+	background: #ef4444;
+	border: none;
+	color: #0b0f1a;
+	border-radius: 10px;
+	padding: 8px 12px;
+	cursor: pointer;
+	font-weight: 700;
+}

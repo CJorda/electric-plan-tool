@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Boxes, Link2, MousePointer } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Boxes, Camera, Link2, MousePointer } from "lucide-react";
 import Sidebar from "./components/Sidebar/Sidebar.jsx";
 import Toolbar from "./components/Toolbar/Toolbar.jsx";
 import CatalogPage from "./pages/CatalogPage/CatalogPage.jsx";
@@ -9,6 +9,7 @@ import BoxModal from "./components/modals/BoxModal/BoxModal.jsx";
 import CableModal from "./components/modals/CableModal/CableModal.jsx";
 import ImageModal from "./components/modals/ImageModal/ImageModal.jsx";
 import SizeModal from "./components/modals/SizeModal/SizeModal.jsx";
+import CameraModal from "./components/modals/CameraModal/CameraModal.jsx";
 import useCatalog from "./hooks/useCatalog.js";
 import useCanvas from "./hooks/useCanvas.js";
 import "./App.css";
@@ -17,6 +18,7 @@ const MODES = [
   { id: "select", label: "Seleccionar", icon: MousePointer },
   { id: "addBox", label: "Añadir cuadro", icon: Boxes },
   { id: "addCable", label: "Dibujar cable", icon: Link2 },
+  { id: "addDevice", label: "Añadir cámara", icon: Camera },
 ];
 
 const BOX_SIZES = {
@@ -28,11 +30,10 @@ const BOX_SIZES = {
 const createId = () => crypto.randomUUID();
 
 const DEFAULT_COMPONENT_FORM = {
-  category: "PLC",
-  model: "Siemens S7-1200",
+  category: "",
+  model: "",
   quantity: 1,
-  unitPrice: 450,
-  customModel: "",
+  unitPrice: 0,
 };
 
 function App() {
@@ -42,10 +43,13 @@ function App() {
   const [openSection, setOpenSection] = useState("Catálogo");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isProjectDesignMode, setIsProjectDesignMode] = useState(false);
+  const [activeProjectId, setActiveProjectId] = useState(null);
   const [isBoxModalOpen, setIsBoxModalOpen] = useState(false);
   const [isCableModalOpen, setIsCableModalOpen] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isSizeModalOpen, setIsSizeModalOpen] = useState(false);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [isPartsListOpen, setIsPartsListOpen] = useState(false);
   const [boxSize, setBoxSize] = useState(BOX_SIZES.medium);
   const [customBoxSize, setCustomBoxSize] = useState({ width: 160, height: 120 });
   const [componentForm, setComponentForm] = useState(DEFAULT_COMPONENT_FORM);
@@ -60,6 +64,7 @@ function App() {
   const {
     productForm,
     setProductForm,
+    products,
     productCategoryFilter,
     setProductCategoryFilter,
     productSort,
@@ -74,13 +79,19 @@ function App() {
     handleSort,
     handleAddCategory,
     updateCategory,
+    deleteCategory,
   } = useCatalog();
 
   const {
     svgRef,
     boxes,
     cables,
+    devices,
+    setBoxes,
+    setCables,
+    setDevices,
     selectedBoxId,
+    selectedDeviceId,
     pan,
     zoom,
     backgroundImage,
@@ -93,6 +104,8 @@ function App() {
     handlePointerMove,
     handlePointerUp,
     handleBoxPointerDown,
+    handleDevicePointerDown,
+    handleDeviceDoubleClick,
     handleBoxDoubleClick,
     handleBoxPointerMove,
     handleBoxPointerLeave,
@@ -120,76 +133,94 @@ function App() {
         totalPrice: cable.totalPrice || 0,
       });
     },
+    onOpenDeviceModal: () => setIsCameraModalOpen(true),
   });
 
-  const catalog = useMemo(
-    () => ({
-      PLC: [
-        { name: "Siemens S7-1200", price: 450 },
-        { name: "Siemens S7-1500", price: 850 },
-        { name: "Allen Bradley CompactLogix", price: 920 },
-        { name: "Schneider M241", price: 380 },
-        { name: "Omron CP1L", price: 290 },
-      ],
-      Protección: [
-        { name: "Magnetotérmico 10A", price: 12 },
-        { name: "Magnetotérmico 16A", price: 15 },
-        { name: "Magnetotérmico 25A", price: 18 },
-        { name: "Diferencial 25A", price: 45 },
-        { name: "Diferencial 40A", price: 52 },
-        { name: "Guardamotor", price: 42 },
-      ],
-      Relé: [
-        { name: "Relé 24VDC", price: 8 },
-        { name: "Relé 24VDC premium", price: 12 },
-        { name: "Relé térmico", price: 28 },
-        { name: "Relé térmico reforzado", price: 32 },
-        { name: "Contactor 9A", price: 18 },
-        { name: "Contactor 18A", price: 25 },
-      ],
-      Fuente: [
-        { name: "24VDC 2.5A", price: 45 },
-        { name: "24VDC 5A", price: 65 },
-        { name: "24VDC 10A", price: 85 },
-        { name: "24VDC 20A", price: 145 },
-        { name: "24VDC 20A industrial", price: 165 },
-      ],
-      Variador: [
-        { name: "0.75kW", price: 180 },
-        { name: "1.5kW", price: 240 },
-        { name: "2.2kW", price: 320 },
-        { name: "5.5kW", price: 420 },
-      ],
-      "HMI/Panel": [
-        { name: "Pantalla táctil 7\"", price: 320 },
-        { name: "Pantalla táctil 10\"", price: 450 },
-        { name: "Pantalla táctil 15\"", price: 650 },
-        { name: "Panel operador compacto", price: 280 },
-        { name: "Panel operador avanzado", price: 520 },
-      ],
-      Sensores: [
-        { name: "Sensor inductivo", price: 25 },
-        { name: "Sensor capacitivo", price: 28 },
-        { name: "Fotocélula estándar", price: 35 },
-        { name: "Fotocélula avanzada", price: 42 },
-        { name: "Encoder", price: 85 },
-      ],
-      Comunicación: [
-        { name: "Switch Ethernet 8p", price: 95 },
-        { name: "Switch Ethernet 16p", price: 145 },
-        { name: "Gateway industrial", price: 280 },
-        { name: "Router industrial", price: 320 },
-      ],
-      Otros: [
-        { name: "Borneras", price: 1.5 },
-        { name: "Riel DIN", price: 2.2 },
-        { name: "Canaleta 40x60", price: 3.5 },
-        { name: "Canaleta 20x40", price: 2.8 },
-        { name: "Kit montaje", price: 0.8 },
-      ],
-    }),
-    []
-  );
+  useEffect(() => {
+    if (!activeProjectId) return;
+    let cancelled = false;
+    const loadDesign = async () => {
+      try {
+        const response = await fetch(`/api/projects/${activeProjectId}/design`);
+        if (!response.ok) throw new Error("Error cargando diseño");
+        const data = await response.json();
+        if (cancelled) return;
+        setBoxes(Array.isArray(data.design?.boxes) ? data.design.boxes : []);
+        setCables(Array.isArray(data.design?.cables) ? data.design.cables : []);
+        setDevices(Array.isArray(data.design?.devices) ? data.design.devices : []);
+      } catch {
+        if (!cancelled) {
+          setBoxes([]);
+          setCables([]);
+          setDevices([]);
+        }
+      }
+    };
+    loadDesign();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId, setBoxes, setCables, setDevices]);
+
+  useEffect(() => {
+    if (!activeProjectId) return;
+    const timeout = setTimeout(() => {
+      fetch(`/api/projects/${activeProjectId}/design`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ design: { boxes, cables, devices } }),
+      }).catch(() => {
+        // ignore
+      });
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [activeProjectId, boxes, cables, devices]);
+
+  const catalog = useMemo(() => {
+    const map = {};
+    categories.forEach((category) => {
+      map[category.name] = [];
+    });
+    products.forEach((product) => {
+      const price = Number(product.discountPrice) > 0 ? product.discountPrice : product.distributorPrice;
+      if (!map[product.category]) map[product.category] = [];
+      map[product.category].push({
+        name: product.name,
+        price: Number(price) || 0,
+        discountPercent: Number(product.discountPercent) || 0,
+      });
+    });
+    return map;
+  }, [categories, products]);
+
+  const cameraCategoryKey = useMemo(() => {
+    const keys = Object.keys(catalog);
+    return keys.find((key) => key.toLowerCase() === "cámaras" || key.toLowerCase() === "camaras") || "";
+  }, [catalog]);
+
+  const cameraCatalog = useMemo(() => (cameraCategoryKey ? catalog[cameraCategoryKey] || [] : []), [catalog, cameraCategoryKey]);
+
+  const catalogCategories = useMemo(() => Object.keys(catalog), [catalog]);
+
+  useEffect(() => {
+    if (catalogCategories.length === 0) return;
+    const nextCategory = catalog[componentForm.category] ? componentForm.category : catalogCategories[0];
+    const models = catalog[nextCategory] || [];
+    const currentModel = models.find((item) => item.name === componentForm.model);
+    const nextModel = currentModel?.name || models[0]?.name || "";
+    const nextPrice = currentModel?.price ?? models[0]?.price ?? 0;
+    setComponentForm((prev) => {
+      if (prev.category === nextCategory && prev.model === nextModel && prev.unitPrice === nextPrice) {
+        return prev;
+      }
+      return {
+        ...prev,
+        category: nextCategory,
+        model: nextModel,
+        unitPrice: nextPrice,
+      };
+    });
+  }, [catalog, catalogCategories, componentForm.category, componentForm.model]);
 
   const sidebarSections = useMemo(
     () => [
@@ -230,6 +261,47 @@ function App() {
   const hideToolbar =
     (isProductsSection || isCategoriesSection || isProjectsSection) && !isProjectDesignMode;
 
+  const breadcrumbItems = useMemo(() => {
+    const items = [
+      { label: "Inicio", onClick: () => {
+        setActiveSection("Catálogo");
+        setActiveSubsection("Productos");
+        setOpenSection("Catálogo");
+        setIsProjectDesignMode(false);
+        setIsPartsListOpen(false);
+      } },
+      { label: activeSection, onClick: () => {
+        setActiveSection(activeSection);
+        const nextSub =
+          sidebarSections.find((section) => section.title === activeSection)?.items?.[0] || "";
+        setActiveSubsection(nextSub);
+        setOpenSection(activeSection);
+        setIsProjectDesignMode(false);
+        setIsPartsListOpen(false);
+      } },
+    ];
+
+    if (isProjectDesignMode) {
+      items.push({ label: "Editor", onClick: () => {
+        setIsProjectDesignMode(true);
+        setIsPartsListOpen(false);
+      }});
+      if (isPartsListOpen) {
+        items.push({ label: "Listado de piezas", onClick: () => setIsPartsListOpen(true) });
+      }
+      return items;
+    }
+
+    if (activeSubsection) {
+      items.push({ label: activeSubsection, onClick: () => {
+        setActiveSubsection(activeSubsection);
+        setIsProjectDesignMode(false);
+        setIsPartsListOpen(false);
+      }});
+    }
+    return items;
+  }, [activeSection, activeSubsection, isProjectDesignMode, isPartsListOpen, sidebarSections]);
+
   const helpMessage = useMemo(() => {
     if (activeMode === "addCable") return "Selecciona un cuadro de origen y destino para añadir el cable.";
     if (activeMode === "addBox") return "Haz click sobre el lienzo para colocar un cuadro.";
@@ -241,25 +313,182 @@ function App() {
   const cablesTotal = cables.reduce((sum, cable) => sum + (Number(cable.totalPrice) || 0), 0);
   const totalBudget = boxesTotal + cablesTotal;
 
+  useEffect(() => {
+    if (!activeProjectId) return;
+    try {
+      const stored = localStorage.getItem("projectTotals");
+      const current = stored ? JSON.parse(stored) : {};
+      current[activeProjectId] = Number(totalBudget) || 0;
+      localStorage.setItem("projectTotals", JSON.stringify(current));
+    } catch {
+      // ignore
+    }
+  }, [activeProjectId, totalBudget]);
+
+  const getDiscountedUnitPrice = (component) => {
+    const base = Number(component.unitPrice) || 0;
+    const percent = Number(component.customerDiscountPercent) || 0;
+    if (base <= 0) return 0;
+    return Math.max(0, base * (1 - percent / 100));
+  };
+
   const handleAddComponent = () => {
     if (!selectedBox) return;
     const selectedModel = catalog[componentForm.category]?.find((item) => item.name === componentForm.model);
-    const modelName = componentForm.model === "Personalizado" ? componentForm.customModel : componentForm.model;
-    const unitPrice =
-      componentForm.model === "Personalizado" ? Number(componentForm.unitPrice) || 0 : selectedModel?.price || 0;
+    const modelName = componentForm.model;
+    const unitPrice = selectedModel?.price || 0;
+    const discountPercent = selectedModel?.discountPercent || 0;
     const quantity = Number(componentForm.quantity) || 0;
-    const component = {
-      id: createId(),
-      category: componentForm.category,
-      model: modelName || "Personalizado",
-      quantity,
-      unitPrice,
-      total: unitPrice * quantity,
-    };
-    updateBox(selectedBox.id, {
-      components: [...selectedBox.components, component],
-    });
+    const existing = selectedBox.components.find(
+      (component) => component.category === componentForm.category && component.model === modelName
+    );
+    if (existing) {
+      const nextQuantity = (Number(existing.quantity) || 0) + quantity;
+      const nextUnitPrice = Number(unitPrice) || 0;
+      const applied = Boolean(existing.discountApplied);
+      const base = applied ? getDiscountedUnitPrice({
+        unitPrice: nextUnitPrice,
+        customerDiscountPercent: existing.customerDiscountPercent ?? 0,
+      }) : nextUnitPrice;
+      const nextComponent = {
+        ...existing,
+        unitPrice: nextUnitPrice,
+        discountPercent: existing.discountPercent ?? discountPercent,
+        customerDiscountPercent: existing.customerDiscountPercent ?? 0,
+        quantity: nextQuantity,
+        total: base * nextQuantity,
+      };
+      updateBox(selectedBox.id, {
+        components: selectedBox.components.map((component) =>
+          component.id === existing.id ? nextComponent : component
+        ),
+      });
+    } else {
+      const component = {
+        id: createId(),
+        category: componentForm.category,
+        model: modelName || "",
+        quantity,
+        unitPrice,
+        discountPercent,
+        customerDiscountPercent: 0,
+        discountApplied: false,
+        productActive: true,
+        total: unitPrice * quantity,
+      };
+      updateBox(selectedBox.id, {
+        components: [...selectedBox.components, component],
+      });
+    }
     setComponentForm(DEFAULT_COMPONENT_FORM);
+  };
+
+  const toggleComponentDiscount = (boxId, componentId, nextApplied) => {
+    if (boxId === "devices") {
+      setDevices((prev) =>
+        prev.map((device) => {
+          if (device.id !== componentId) return device;
+          const discountedUnit = getDiscountedUnitPrice(device);
+          const unit = nextApplied ? discountedUnit : Number(device.unitPrice) || 0;
+          return {
+            ...device,
+            discountApplied: nextApplied,
+            total: unit,
+          };
+        })
+      );
+      return;
+    }
+    const targetBox = boxes.find((box) => box.id === boxId);
+    if (!targetBox) return;
+    const nextComponents = targetBox.components.map((component) => {
+      if (component.id !== componentId) return component;
+      const discountedUnit = getDiscountedUnitPrice(component);
+      const unit = nextApplied ? discountedUnit : Number(component.unitPrice) || 0;
+      return {
+        ...component,
+        discountApplied: nextApplied,
+        total: unit * (Number(component.quantity) || 0),
+      };
+    });
+    updateBox(boxId, { components: nextComponents });
+  };
+
+  const toggleComponentActive = (boxId, componentId, nextActive) => {
+    if (boxId === "devices") {
+      setDevices((prev) =>
+        prev.map((device) => {
+          if (device.id !== componentId) return device;
+          if (!nextActive) {
+            return { ...device, productActive: false, total: 0 };
+          }
+          const unit = device.discountApplied
+            ? getDiscountedUnitPrice(device)
+            : Number(device.unitPrice) || 0;
+          return {
+            ...device,
+            productActive: true,
+            total: unit,
+          };
+        })
+      );
+      return;
+    }
+    const targetBox = boxes.find((box) => box.id === boxId);
+    if (!targetBox) return;
+    const nextComponents = targetBox.components.map((component) => {
+      if (component.id !== componentId) return component;
+      if (!nextActive) {
+        return { ...component, productActive: false, total: 0 };
+      }
+      const unit = component.discountApplied
+        ? getDiscountedUnitPrice(component)
+        : Number(component.unitPrice) || 0;
+      return {
+        ...component,
+        productActive: true,
+        total: unit * (Number(component.quantity) || 0),
+      };
+    });
+    updateBox(boxId, { components: nextComponents });
+  };
+
+  const updateComponentCustomerDiscount = (boxId, componentId, percent) => {
+    if (boxId === "devices") {
+      setDevices((prev) =>
+        prev.map((device) => {
+          if (device.id !== componentId) return device;
+          const nextDevice = {
+            ...device,
+            customerDiscountPercent: Number(percent) || 0,
+          };
+          if (nextDevice.discountApplied) {
+            const discountedUnit = getDiscountedUnitPrice(nextDevice);
+            return { ...nextDevice, total: discountedUnit };
+          }
+          return nextDevice;
+        })
+      );
+      return;
+    }
+    const targetBox = boxes.find((box) => box.id === boxId);
+    if (!targetBox) return;
+    const nextComponents = targetBox.components.map((component) => {
+      if (component.id !== componentId) return component;
+      const nextComponent = {
+        ...component,
+        customerDiscountPercent: Number(percent) || 0,
+      };
+      if (nextComponent.discountApplied) {
+        const discountedUnit = getDiscountedUnitPrice(nextComponent);
+        return {
+          ...nextComponent,
+          total: discountedUnit * (Number(nextComponent.quantity) || 0),
+        };
+      }
+      return nextComponent;
+    });
+    updateBox(boxId, { components: nextComponents });
   };
 
   const removeComponent = (componentId) => {
@@ -297,11 +526,7 @@ function App() {
     const errors = [];
     if (!componentForm.category) errors.push("Selecciona una categoría.");
     if (!componentForm.model) errors.push("Selecciona un modelo.");
-    if (componentForm.model === "Personalizado" && !componentForm.customModel.trim()) {
-      errors.push("Indica el modelo personalizado.");
-    }
     if (Number(componentForm.quantity) <= 0) errors.push("Cantidad mínima 1.");
-    if (Number(componentForm.unitPrice) < 0) errors.push("Precio unitario inválido.");
     return errors;
   };
 
@@ -340,6 +565,16 @@ function App() {
       />
 
       <div className="main">
+        <nav className="breadcrumb" aria-label="Breadcrumb">
+          {breadcrumbItems.map((item, index) => (
+            <span key={`${item.label}-${index}`} className="breadcrumb__item">
+              <button className="breadcrumb__link" type="button" onClick={item.onClick}>
+                {item.label}
+              </button>
+              {index < breadcrumbItems.length - 1 && <span className="breadcrumb__sep">/</span>}
+            </span>
+          ))}
+        </nav>
         <Toolbar
           visible={!hideToolbar}
           zoom={zoom}
@@ -372,12 +607,14 @@ function App() {
           onCategoryFormChange={(updates) => setCategoryForm((prev) => ({ ...prev, ...updates }))}
           onAddCategory={handleAddCategory}
           onUpdateCategory={updateCategory}
+          onDeleteCategory={deleteCategory}
         />
 
         <ProjectsPage
-          isProjectsSection={isProjectsSection}
+          isProjectsSection={isProjectsSection && !isProjectDesignMode}
           activeSubsection={activeSubsection}
-          onOpenDesigner={() => {
+          onOpenDesigner={(projectId) => {
+            setActiveProjectId(projectId);
             setIsProjectDesignMode(true);
             setActiveMode("select");
           }}
@@ -396,7 +633,9 @@ function App() {
           backgroundImage={backgroundImage}
           boxes={boxes}
           cables={cables}
+          devices={devices}
           selectedBoxId={selectedBoxId}
+          selectedDeviceId={selectedDeviceId}
           draftCable={draftCable}
           draftPolyline={draftPolyline}
           tooltip={tooltip}
@@ -408,6 +647,8 @@ function App() {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onBoxPointerDown={handleBoxPointerDown}
+          onDevicePointerDown={handleDevicePointerDown}
+          onDeviceDoubleClick={handleDeviceDoubleClick}
           onBoxDoubleClick={handleBoxDoubleClick}
           onBoxPointerMove={handleBoxPointerMove}
           onBoxPointerLeave={handleBoxPointerLeave}
@@ -447,6 +688,11 @@ function App() {
             );
           }}
           onEditSelected={() => setIsBoxModalOpen(true)}
+          onToggleComponentDiscount={toggleComponentDiscount}
+          onUpdateComponentCustomerDiscount={updateComponentCustomerDiscount}
+          onToggleComponentActive={toggleComponentActive}
+          partsListOpen={isPartsListOpen}
+          onTogglePartsList={() => setIsPartsListOpen((prev) => !prev)}
         />
       </div>
 
@@ -457,12 +703,27 @@ function App() {
         catalog={catalog}
         onClose={() => setIsBoxModalOpen(false)}
         onNameChange={(name) => updateBox(selectedBox.id, { name })}
+        onZoneChange={(zone) => updateBox(selectedBox.id, { zone })}
         onComponentFormChange={(updates) => setComponentForm((prev) => ({ ...prev, ...updates }))}
         onAddComponent={handleAddComponent}
         onRemoveComponent={removeComponent}
         onDeleteBox={handleDeleteBox}
         componentErrors={componentErrors}
         isNameValid={isBoxNameValid}
+      />
+
+      <CameraModal
+        open={isCameraModalOpen}
+        device={devices.find((device) => device.id === selectedDeviceId) || null}
+        catalog={cameraCatalog}
+        categoryName={cameraCategoryKey || "Cámaras"}
+        onClose={() => setIsCameraModalOpen(false)}
+        onUpdate={(updates) =>
+          setDevices((prev) => prev.map((device) => (device.id === selectedDeviceId ? { ...device, ...updates } : device)))
+        }
+        onDelete={() =>
+          setDevices((prev) => prev.filter((device) => device.id !== selectedDeviceId))
+        }
       />
 
       <CableModal

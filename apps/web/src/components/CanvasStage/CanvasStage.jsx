@@ -7,7 +7,9 @@ function CanvasStage({
   backgroundImage,
   boxes,
   cables,
+  devices,
   selectedBoxId,
+  selectedDeviceId,
   draftCable,
   draftPolyline,
   tooltip,
@@ -19,6 +21,8 @@ function CanvasStage({
   onPointerMove,
   onPointerUp,
   onBoxPointerDown,
+  onDevicePointerDown,
+  onDeviceDoubleClick,
   onBoxDoubleClick,
   onBoxPointerMove,
   onBoxPointerLeave,
@@ -27,6 +31,7 @@ function CanvasStage({
   renderCableLabelPosition,
   renderBoxLabel,
   onEditSelected,
+  onTogglePartsList,
 }) {
   return (
     <main className="canvas">
@@ -41,6 +46,9 @@ function CanvasStage({
             Editar cuadro
           </button>
         )}
+        <button className="canvas__edit" type="button" onClick={onTogglePartsList}>
+          Listado de piezas
+        </button>
       </div>
 
       <div className="canvas__stage">
@@ -131,12 +139,40 @@ function CanvasStage({
                 {renderBoxLabel(box)}
               </g>
             ))}
+
+            {devices.map((device) => (
+              <g key={device.id}>
+                <circle
+                  cx={device.x}
+                  cy={device.y}
+                  r={14}
+                  fill={device.id === selectedDeviceId ? "#1e293b" : "#0f172a"}
+                  stroke={device.id === selectedDeviceId ? "#38bdf8" : "#64748b"}
+                  strokeWidth="2"
+                  onPointerDown={(event) => onDevicePointerDown?.(event, device)}
+                  onDoubleClick={(event) => onDeviceDoubleClick?.(event, device)}
+                />
+                <circle cx={device.x} cy={device.y} r={5} fill="#38bdf8" />
+                <text
+                  x={device.x}
+                  y={device.y + 26}
+                  textAnchor="middle"
+                  fill="#e2e8f0"
+                  fontSize="11"
+                >
+                  {device.name || "Cámara"}
+                </text>
+              </g>
+            ))}
           </g>
         </svg>
 
         {tooltip && (
           <div className="canvas__tooltip" style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}>
             <div className="canvas__tooltip-title">{tooltip.box.name}</div>
+            {tooltip.box.zone && (
+              <div className="canvas__tooltip-row">Zona: {tooltip.box.zone}</div>
+            )}
             <div className="canvas__tooltip-row">
               Componentes: <strong>{tooltip.box.components.length}</strong>
             </div>

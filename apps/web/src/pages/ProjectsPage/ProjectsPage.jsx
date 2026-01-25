@@ -1,16 +1,29 @@
 import { useEffect, useState } from "react";
 import "./ProjectsPage.css";
 
-const PROJECT_TYPES = ["Cuadro eléctrico", "PLC", "Variador", "Instalación", "Otro"];
-
-function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onProjectCreated }) {
+function ProjectsPage({
+  isProjectsSection,
+  activeSubsection,
+  onOpenDesigner,
+  onProjectCreated,
+}) {
   const apiEnabled = import.meta.env.VITE_API_ENABLED === "true";
-  const [projectType, setProjectType] = useState(PROJECT_TYPES[0]);
+  const [projectType, setProjectType] = useState("General");
   const [projectName, setProjectName] = useState("");
   const [projectNotes, setProjectNotes] = useState("");
+  const [projectDate, setProjectDate] = useState("");
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [projectTotals, setProjectTotals] = useState(() => {
+    try {
+      const stored = localStorage.getItem("projectTotals");
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [deleteCandidate, setDeleteCandidate] = useState(null);
 
   const isList = activeSubsection === "Listado";
   const isNew = activeSubsection === "Nuevo";
@@ -32,14 +45,34 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
     }
   };
 
-  const addLocalProject = ({ name, type, notes }) => {
+  const removeLocalProject = (projectId) => {
+    setProjects((prev) => {
+      const next = prev.filter((project) => project.id !== projectId);
+      writeLocalProjects(next);
+      return next;
+    });
+  };
+
+  const removeProjectTotal = (projectId) => {
+    try {
+      const stored = localStorage.getItem("projectTotals");
+      const current = stored ? JSON.parse(stored) : {};
+      delete current[projectId];
+      localStorage.setItem("projectTotals", JSON.stringify(current));
+      setProjectTotals(current);
+    } catch {
+      // ignore
+    }
+  };
+
+  const addLocalProject = ({ name, type, notes, createdAt }) => {
     const localProject = {
       id: `local-${crypto.randomUUID()}`,
       name,
       type,
       notes,
       status: "local",
-      created_at: new Date().toISOString(),
+      created_at: createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
     setProjects((prev) => {
@@ -77,6 +110,12 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
       if (localProjects.length > 0) {
         setProjects(localProjects);
       }
+      try {
+        const storedTotals = localStorage.getItem("projectTotals");
+        setProjectTotals(storedTotals ? JSON.parse(storedTotals) : {});
+      } catch {
+        setProjectTotals({});
+      }
       loadProjects();
     }
   }, [isProjectsSection]);
@@ -88,17 +127,20 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
     }
     setIsLoading(true);
     setError("");
+    const createdAt = projectDate ? new Date(projectDate).toISOString() : new Date().toISOString();
     const payload = {
       name: projectName.trim(),
       type: projectType,
       notes: projectNotes.trim(),
+      createdAt,
     };
     if (!apiEnabled) {
-      addLocalProject(payload);
+      const localProject = addLocalProject(payload);
       setProjectName("");
       setProjectNotes("");
+      setProjectDate("");
       onProjectCreated();
-      onOpenDesigner();
+      onOpenDesigner(localProject.id);
       setIsLoading(false);
       return;
     }
@@ -113,21 +155,57 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
       setProjects((prev) => [created, ...prev]);
       setProjectName("");
       setProjectNotes("");
+      setProjectDate("");
       onProjectCreated();
-      onOpenDesigner();
+      onOpenDesigner(created.id);
     } catch (err) {
       setError("API no disponible. Proyecto guardado localmente.");
-      addLocalProject(payload);
+      const localProject = addLocalProject(payload);
       setProjectName("");
       setProjectNotes("");
+      setProjectDate("");
       onProjectCreated();
-      onOpenDesigner();
+      onOpenDesigner(localProject.id);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleDeleteProject = async () => {
+    if (!deleteCandidate) return;
+    const projectId = deleteCandidate.id;
+    setError("");
+    if (!apiEnabled || deleteCandidate.status === "local") {
+      removeLocalProject(projectId);
+      removeProjectTotal(projectId);
+      setDeleteCandidate(null);
+      return;
+    }
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Error eliminando proyecto");
+      setProjects((prev) => prev.filter((project) => project.id !== projectId));
+      removeProjectTotal(projectId);
+    } catch (err) {
+      setError("No se pudo eliminar el proyecto.");
+    } finally {
+      setDeleteCandidate(null);
+    }
+  };
+
   if (!isProjectsSection) return null;
+
+  const formatDate = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("es-ES", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
+  };
+
 
   return (
     <section className="projects">
@@ -148,22 +226,40 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
             <div className="projects__list">
               {projects.map((project) => (
                 <div key={project.id} className="projects__card">
-                  <div>
-                    <strong>{project.name}</strong>
+                  <div className="projects__info">
+                    <div className="projects__title-row">
+                      <strong className="projects__name">{project.name}</strong>
+                      <span className="projects__price">
+                        €{Number(projectTotals[project.id] ?? 0).toFixed(2)}
+                      </span>
+                    </div>
                     <div className="projects__meta">
                       {project.type} · {project.status === "local" ? "local" : project.status}
                     </div>
+                    {project.created_at && (
+                      <div className="projects__meta">Creado: {formatDate(project.created_at)}</div>
+                    )}
                   </div>
-                  <button className="projects__action" type="button" onClick={onOpenDesigner}>
-                    Abrir editor
-                  </button>
+                  <div className="projects__actions">
+                    <button
+                      className="projects__action"
+                      type="button"
+                      onClick={() => onOpenDesigner(project.id)}
+                    >
+                      Abrir editor
+                    </button>
+                    <button
+                      className="projects__danger"
+                      type="button"
+                      onClick={() => setDeleteCandidate(project)}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
-          <button className="projects__action" type="button" onClick={onOpenDesigner}>
-            Abrir editor
-          </button>
         </div>
       )}
 
@@ -179,13 +275,15 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
           </label>
           <label className="projects__label">
             Tipo de proyecto
-            <select value={projectType} onChange={(event) => setProjectType(event.target.value)}>
-              {PROJECT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
+            <input
+              value={projectType}
+              onChange={(event) => setProjectType(event.target.value)}
+              placeholder="Ej: CCM, distribución, PLC"
+            />
+          </label>
+          <label className="projects__label">
+            Fecha de creación
+            <input type="date" value={projectDate} onChange={(event) => setProjectDate(event.target.value)} />
           </label>
           <label className="projects__label projects__label--full">
             Especificaciones básicas
@@ -200,6 +298,24 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
           <button className="projects__action" type="button" onClick={handleCreateProject} disabled={isLoading}>
             {isLoading ? "Creando..." : "Crear y abrir editor"}
           </button>
+        </div>
+      )}
+      {deleteCandidate && (
+        <div className="projects__modal-overlay" role="dialog" aria-modal="true">
+          <div className="projects__modal">
+            <h3>¿Eliminar proyecto?</h3>
+            <p>
+              Se eliminará <strong>{deleteCandidate.name}</strong> de forma permanente.
+            </p>
+            <div className="projects__modal-actions">
+              <button className="projects__modal-cancel" type="button" onClick={() => setDeleteCandidate(null)}>
+                Cancelar
+              </button>
+              <button className="projects__modal-confirm" type="button" onClick={handleDeleteProject}>
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

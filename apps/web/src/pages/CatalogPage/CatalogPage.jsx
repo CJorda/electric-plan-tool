@@ -21,6 +21,7 @@ function CatalogPage({
   onCategoryFormChange,
   onAddCategory,
   onUpdateCategory,
+  onDeleteCategory,
 }) {
   return (
     <>
@@ -47,6 +48,7 @@ function CatalogPage({
           onAddCategory={onAddCategory}
           categories={categories}
           onUpdateCategory={onUpdateCategory}
+          onDeleteCategory={onDeleteCategory}
         />
       )}
     </>

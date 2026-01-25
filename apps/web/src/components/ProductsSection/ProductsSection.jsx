@@ -14,6 +14,14 @@ function ProductsSection({
   sortState,
   onUpdateProduct,
 }) {
+  const getDiscountedPrice = (pvp, discountPercent) => {
+    const base = Number(pvp) || 0;
+    const percent = Number(discountPercent) || 0;
+    if (base <= 0) return 0;
+    const raw = base * (1 - percent / 100);
+    return Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  };
+
   return (
     <section className="products">
       <div className="products__header">
@@ -49,9 +57,10 @@ function ProductsSection({
             { key: "category", label: "Categoría" },
             { key: "name", label: "Producto" },
             { key: "serial", label: "Serie fabricante" },
-            { key: "distributorPrice", label: "Precio distribuidor" },
-            { key: "discountPrice", label: "Precio descuento" },
-            { key: "shippingCost", label: "Gastos envío" },
+            { key: "distributorPrice", label: "Precio PVP (€)" },
+            { key: "discountPercent", label: "Descuento (%)" },
+            { key: "discountPrice", label: "Precio con descuento (€)" },
+            { key: "shippingCost", label: "Gastos envío (€)" },
             { key: "leadTime", label: "Lead time" },
           ].map((column) => (
             <button key={column.key} type="button" onClick={() => onSort(column.key)}>
@@ -94,7 +103,7 @@ function ProductsSection({
           <input
             type="number"
             min="0"
-            placeholder="Precio distribuidor"
+            placeholder="Precio PVP"
             value={productForm.distributorPrice}
             onChange={(event) => onProductFormChange({ distributorPrice: event.target.value })}
             onKeyDown={onProductInputKeyDown}
@@ -102,10 +111,16 @@ function ProductsSection({
           <input
             type="number"
             min="0"
-            placeholder="Precio descuento"
-            value={productForm.discountPrice}
-            onChange={(event) => onProductFormChange({ discountPrice: event.target.value })}
+            placeholder="Descuento %"
+            value={productForm.discountPercent}
+            onChange={(event) => onProductFormChange({ discountPercent: event.target.value })}
             onKeyDown={onProductInputKeyDown}
+          />
+          <input
+            className="products__readonly"
+            value={getDiscountedPrice(productForm.distributorPrice, productForm.discountPercent).toFixed(2)}
+            readOnly
+            tabIndex={-1}
           />
           <input
             type="number"
@@ -165,10 +180,16 @@ function ProductsSection({
                   <input
                     type="number"
                     min="0"
-                    value={product.discountPrice}
+                    value={product.discountPercent ?? 0}
                     onChange={(event) =>
-                      onUpdateProduct(product.id, { discountPrice: Number(event.target.value) })
+                      onUpdateProduct(product.id, { discountPercent: Number(event.target.value) })
                     }
+                  />
+                  <input
+                    className="products__readonly"
+                    value={getDiscountedPrice(product.distributorPrice, product.discountPercent ?? 0).toFixed(2)}
+                    readOnly
+                    tabIndex={-1}
                   />
                   <input
                     type="number"

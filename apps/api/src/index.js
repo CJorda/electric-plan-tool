@@ -6,7 +6,7 @@ import { authRouter } from "./routes/auth.js";
 import { projectsRouter } from "./routes/projects.js";
 import { catalogRouter } from "./routes/catalog.js";
 import { reportsRouter } from "./routes/reports.js";
-import { ensureProjectsTable } from "./db.js";
+import { initDatabase } from "./db.js";
 
 dotenv.config();
 
@@ -29,7 +29,7 @@ app.use((req, res) => {
   res.status(404).json({ error: "Ruta no encontrada" });
 });
 
-ensureProjectsTable()
+initDatabase()
   .then(() => {
     app.listen(port, () => {
       console.log(`API escuchando en puerto ${port}`);

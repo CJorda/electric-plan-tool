@@ -10,7 +10,14 @@ const projectSchema = z.object({
   type: z.string().min(1),
   notes: z.string().optional().nullable(),
   status: z.string().optional().default("draft"),
+  createdAt: z.string().optional().nullable(),
 });
+
+const parseCreatedAt = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
 
 projectsRouter.get("/", async (req, res) => {
   try {
@@ -29,14 +36,15 @@ projectsRouter.post("/", async (req, res) => {
     return res.status(400).json({ error: "Datos inválidos", details: parsed.error.format() });
   }
 
-  const { name, type, notes, status } = parsed.data;
+  const { name, type, notes, status, createdAt } = parsed.data;
   const id = randomUUID();
   try {
+    const createdAtValue = parseCreatedAt(createdAt);
     const result = await query(
-      `INSERT INTO projects (id, name, type, notes, status)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO projects (id, name, type, notes, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()), NOW())
        RETURNING id, name, type, notes, status, created_at, updated_at`,
-      [id, name, type, notes ?? null, status]
+      [id, name, type, notes ?? null, status, createdAtValue]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -56,6 +64,37 @@ projectsRouter.get("/:projectId", async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: "Error obteniendo proyecto" });
+  }
+});
+
+projectsRouter.get("/:projectId/design", async (req, res) => {
+  try {
+    const result = await query("SELECT design FROM projects WHERE id = $1", [req.params.projectId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Proyecto no encontrado" });
+    }
+    res.json({ design: result.rows[0].design || { boxes: [], cables: [] } });
+  } catch (error) {
+    res.status(500).json({ error: "Error obteniendo diseño" });
+  }
+});
+
+projectsRouter.put("/:projectId/design", async (req, res) => {
+  const design = req.body?.design;
+  if (!design || typeof design !== "object") {
+    return res.status(400).json({ error: "Diseño inválido" });
+  }
+  try {
+    const result = await query(
+      "UPDATE projects SET design = $1, updated_at = NOW() WHERE id = $2 RETURNING design",
+      [design, req.params.projectId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Proyecto no encontrado" });
+    }
+    res.json({ design: result.rows[0].design || { boxes: [], cables: [] } });
+  } catch (error) {
+    res.status(500).json({ error: "Error guardando diseño" });
   }
 });
 

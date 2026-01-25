@@ -7,6 +7,7 @@ function BoxModal({
   catalog,
   onClose,
   onNameChange,
+  onZoneChange,
   onComponentFormChange,
   onAddComponent,
   onRemoveComponent,
@@ -17,7 +18,7 @@ function BoxModal({
   if (!open || !box) return null;
 
   return (
-    <div className="modal">
+    <div className="modal modal--box">
       <div className="modal__content">
         <div className="modal__header">
           <h2>Editar cuadro</h2>
@@ -32,6 +33,15 @@ function BoxModal({
         </label>
         {!isNameValid && <p className="modal__error">El nombre es obligatorio.</p>}
 
+        <label className="modal__label">
+          Zona de planta
+          <input
+            value={box.zone || ""}
+            onChange={(event) => onZoneChange?.(event.target.value)}
+            placeholder="Ej: Nave A · Zona 3"
+          />
+        </label>
+
         <div className="modal__grid">
           <label className="modal__label">
             Categoría
@@ -40,7 +50,7 @@ function BoxModal({
               onChange={(event) =>
                 onComponentFormChange({
                   category: event.target.value,
-                  model: catalog[event.target.value]?.[0]?.name || "Personalizado",
+                  model: catalog[event.target.value]?.[0]?.name || "",
                   unitPrice: catalog[event.target.value]?.[0]?.price || 0,
                 })
               }
@@ -64,28 +74,21 @@ function BoxModal({
                   componentForm.unitPrice;
                 onComponentFormChange({
                   model: value,
-                  unitPrice: value === "Personalizado" ? componentForm.unitPrice : price,
+                  unitPrice: price,
                 });
               }}
             >
-              {catalog[componentForm.category]?.map((item) => (
-                <option key={item.name} value={item.name}>
-                  {item.name} ({item.price}€)
-                </option>
-              ))}
-              <option value="Personalizado">Personalizado</option>
+              {catalog[componentForm.category]?.length ? (
+                catalog[componentForm.category]?.map((item) => (
+                  <option key={item.name} value={item.name}>
+                    {item.name} ({item.price}€)
+                  </option>
+                ))
+              ) : (
+                <option value="">Sin modelos</option>
+              )}
             </select>
           </label>
-
-          {componentForm.model === "Personalizado" && (
-            <label className="modal__label">
-              Modelo personalizado
-              <input
-                value={componentForm.customModel}
-                onChange={(event) => onComponentFormChange({ customModel: event.target.value })}
-              />
-            </label>
-          )}
 
           <label className="modal__label">
             Cantidad
@@ -97,15 +100,6 @@ function BoxModal({
             />
           </label>
 
-          <label className="modal__label">
-            Precio unitario (€)
-            <input
-              type="number"
-              min="0"
-              value={componentForm.unitPrice}
-              onChange={(event) => onComponentFormChange({ unitPrice: Number(event.target.value) })}
-            />
-          </label>
         </div>
 
         <button

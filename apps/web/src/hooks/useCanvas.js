@@ -1,11 +1,14 @@
 import { useMemo, useRef, useState } from "react";
 
-function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal }) {
+function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOpenDeviceModal }) {
   const svgRef = useRef(null);
   const [boxes, setBoxes] = useState([]);
   const [cables, setCables] = useState([]);
+  const [devices, setDevices] = useState([]);
   const [selectedBoxId, setSelectedBoxId] = useState(null);
+  const [selectedDeviceId, setSelectedDeviceId] = useState(null);
   const [draggingBox, setDraggingBox] = useState(null);
+  const [draggingDevice, setDraggingDevice] = useState(null);
   const [draftCable, setDraftCable] = useState(null);
   const [draftCursor, setDraftCursor] = useState(null);
   const [tooltip, setTooltip] = useState(null);
@@ -31,11 +34,35 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal }) {
       width: boxSize.width,
       height: boxSize.height,
       name: `Cuadro ${boxes.length + 1}`,
+      zone: "",
       components: [],
     };
     setBoxes((prev) => [...prev, newBox]);
     setSelectedBoxId(newBox.id);
+    setSelectedDeviceId(null);
     onOpenBoxModal();
+  };
+
+  const addDeviceAtPoint = (point) => {
+    const newDevice = {
+      id: crypto.randomUUID(),
+      x: point.x,
+      y: point.y,
+      type: "camera",
+      name: `Cámara ${devices.length + 1}`,
+      zone: "",
+      category: "",
+      model: "",
+      unitPrice: 0,
+      customerDiscountPercent: 0,
+      discountApplied: false,
+      productActive: true,
+      total: 0,
+    };
+    setDevices((prev) => [...prev, newDevice]);
+    setSelectedDeviceId(newDevice.id);
+    setSelectedBoxId(null);
+    onOpenDeviceModal?.(newDevice.id);
   };
 
   const handleCanvasClick = (event) => {
@@ -43,6 +70,11 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal }) {
     if (activeMode === "addBox") {
       const point = getCanvasPoint(event);
       addBoxAtPoint(point);
+      return;
+    }
+    if (activeMode === "addDevice") {
+      const point = getCanvasPoint(event);
+      addDeviceAtPoint(point);
       return;
     }
     if (activeMode === "addCable" && draftCable) {
@@ -54,6 +86,7 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal }) {
       return;
     }
     setSelectedBoxId(null);
+    setSelectedDeviceId(null);
   };
 
   const handleWheel = (event) => {
@@ -102,12 +135,27 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal }) {
         )
       );
     }
+    if (draggingDevice) {
+      const point = getCanvasPoint(event);
+      setDevices((prev) =>
+        prev.map((device) =>
+          device.id === draggingDevice.id
+            ? {
+                ...device,
+                x: point.x - draggingDevice.offsetX,
+                y: point.y - draggingDevice.offsetY,
+              }
+            : device
+        )
+      );
+    }
   };
 
   const handlePointerUp = () => {
     setIsPanning(false);
     setPanStart(null);
     setDraggingBox(null);
+    setDraggingDevice(null);
   };
 
   const handleBoxPointerDown = (event, box) => {
@@ -139,6 +187,7 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal }) {
     }
     if (activeMode === "select") {
       setSelectedBoxId(box.id);
+      setSelectedDeviceId(null);
       const point = getCanvasPoint(event);
       setDraggingBox({
         id: box.id,
@@ -148,11 +197,31 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal }) {
     }
   };
 
+  const handleDevicePointerDown = (event, device) => {
+    event.stopPropagation();
+    if (activeMode !== "select") return;
+    setSelectedDeviceId(device.id);
+    setSelectedBoxId(null);
+    const point = getCanvasPoint(event);
+    setDraggingDevice({
+      id: device.id,
+      offsetX: point.x - device.x,
+      offsetY: point.y - device.y,
+    });
+  };
+
   const handleBoxDoubleClick = (event, box) => {
     event.stopPropagation();
     if (activeMode !== "select") return;
     setSelectedBoxId(box.id);
     onOpenBoxModal();
+  };
+
+  const handleDeviceDoubleClick = (event, device) => {
+    event.stopPropagation();
+    if (activeMode !== "select") return;
+    setSelectedDeviceId(device.id);
+    onOpenDeviceModal?.(device.id);
   };
 
   const handleBoxPointerMove = (event, box) => {
@@ -238,8 +307,13 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal }) {
     svgRef,
     boxes,
     cables,
+    devices,
+    setBoxes,
+    setCables,
+    setDevices,
     selectedBoxId,
     setSelectedBoxId,
+    selectedDeviceId,
     pan,
     zoom,
     backgroundImage,
@@ -252,7 +326,9 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal }) {
     handlePointerMove,
     handlePointerUp,
     handleBoxPointerDown,
+    handleDevicePointerDown,
     handleBoxDoubleClick,
+    handleDeviceDoubleClick,
     handleBoxPointerMove,
     handleBoxPointerLeave,
     updateBox,
