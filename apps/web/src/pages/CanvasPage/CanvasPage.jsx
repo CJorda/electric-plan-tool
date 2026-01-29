@@ -85,6 +85,82 @@ function CanvasPage({
     return groups;
   }, [boxes, devices]);
 
+  const buildBomRows = () => {
+    const rows = [];
+    groupedRows.forEach((group) => {
+      group.items.forEach((item) => {
+        const unitPrice = Number(item.unitPrice) || 0;
+        const percent = Number(item.customerDiscountPercent) || 0;
+        const discountApplied = Boolean(item.discountApplied);
+        const discountedUnit = discountApplied ? Math.max(0, unitPrice * (1 - percent / 100)) : unitPrice;
+        const quantity = Number(item.quantity) || 1;
+        const total = Number(item.total || discountedUnit * quantity) || 0;
+        rows.push({
+          boxId: group.boxId,
+          boxName: group.boxName,
+          category: item.category || group.boxName || "",
+          model: item.model || item.name || "",
+          quantity,
+          unitPrice: unitPrice.toFixed(2),
+          customerDiscountPercent: percent,
+          discountApplied,
+          unitPriceWithDiscount: discountedUnit.toFixed(2),
+          total: Number(total).toFixed(2),
+          type: item.type || "component",
+        });
+      });
+    });
+    return rows;
+  };
+
+  const exportBOMCSV = () => {
+    const rows = buildBomRows();
+    if (rows.length === 0) return;
+    const header = [
+      "Box ID",
+      "Box Name",
+      "Category",
+      "Model",
+      "Quantity",
+      "Unit Price (€)",
+      "Customer Discount (%)",
+      "Discount Applied",
+      "Unit Price With Discount (€)",
+      "Total (€)",
+      "Type",
+    ];
+    const lines = [header.join(",")];
+    rows.forEach((r) => {
+      const cols = [
+        r.boxId,
+        (r.boxName || "").replace(/\"/g, '""'),
+        (r.category || "").replace(/\"/g, '""'),
+        (r.model || "").replace(/\"/g, '""'),
+        r.quantity,
+        r.unitPrice,
+        r.customerDiscountPercent,
+        r.discountApplied ? "YES" : "NO",
+        r.unitPriceWithDiscount,
+        r.total,
+        r.type,
+      ];
+      // Wrap fields that may contain commas in quotes
+      const safe = cols.map((c) => (typeof c === "string" && c.includes(",") ? `"${c}"` : c));
+      lines.push(safe.join(","));
+    });
+    const csv = lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const now = new Date().toISOString().replace(/[:.]/g, "-");
+    a.download = `bom-${now}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const [openBoxes, setOpenBoxes] = useState({});
 
   const toggleBox = (boxId) => {
@@ -106,9 +182,14 @@ function CanvasPage({
           <div className="canvas__mode">Listado de piezas</div>
           <div className="canvas__help">Elementos del proyecto con descuentos y totales.</div>
           <div className="canvas__hint">Vuelve al diseñador para seguir editando.</div>
-          <button className="canvas__edit" type="button" onClick={onTogglePartsList}>
-            Volver al diseñador
-          </button>
+            <div style={{display: 'flex', gap: 8}}>
+              <button className="canvas__export" type="button" onClick={exportBOMCSV}>
+                Exportar BOM
+              </button>
+              <button className="canvas__edit" type="button" onClick={onTogglePartsList}>
+                Volver al diseñador
+              </button>
+            </div>
         </div>
 
         <section className="canvas__parts">

@@ -192,6 +192,51 @@ function App() {
     return () => clearTimeout(timeout);
   }, [activeProjectId, boxes, cables, devices]);
 
+  // Auto-calculate cable lengths and total prices when boxes/cable points change.
+  useEffect(() => {
+    if (!cables || cables.length === 0) return;
+    const computeLengthForCable = (cable) => {
+      const fromBox = boxes.find((b) => b.id === cable.fromBoxId);
+      const toBox = boxes.find((b) => b.id === cable.toBoxId);
+      if (!fromBox || !toBox) return 0;
+      const center = (box) => ({ x: box.x + (box.width || 0) / 2, y: box.y + (box.height || 0) / 2 });
+      const pts = [center(fromBox), ...(Array.isArray(cable.points) ? cable.points : []), center(toBox)];
+      let len = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        const dx = (b.x || 0) - (a.x || 0);
+        const dy = (b.y || 0) - (a.y || 0);
+        len += Math.sqrt(dx * dx + dy * dy);
+      }
+      // Assume SVG units are pixels; convert to meters with a heuristic if needed.
+      // For now, treat 1 unit as 0.01 m (1 px -> 1 cm) to produce realistic cable lengths.
+      const meters = Math.round((len * 0.01) * 10) / 10; // one decimal
+      return meters;
+    };
+
+    cables.forEach((cable) => {
+      const lengthMeters = computeLengthForCable(cable);
+      // Determine price per meter from products catalog if matching model name
+      let pricePerMeter = 0;
+      try {
+        const match = products.find((p) => String(p.name || "").toLowerCase() === String(cable.model || "").toLowerCase());
+        if (match) pricePerMeter = Number(match.discountPrice || match.distributorPrice) || 0;
+      } catch {
+        pricePerMeter = 0;
+      }
+      const computedTotal = Math.round((lengthMeters * (pricePerMeter || 0)) * 100) / 100;
+      const needUpdateLength = cable.length !== lengthMeters;
+      const needUpdateTotal = cable.autoCalculated !== false && Number(cable.totalPrice || 0) !== computedTotal;
+      if (needUpdateLength || needUpdateTotal) {
+        const updates = {};
+        if (needUpdateLength) updates.length = lengthMeters;
+        if (needUpdateTotal) updates.totalPrice = computedTotal;
+        updateCable(cable.id, updates);
+      }
+    });
+  }, [boxes, cables, products, updateCable]);
+
   const catalog = useMemo(() => {
     const map = {};
     categories.forEach((category) => {

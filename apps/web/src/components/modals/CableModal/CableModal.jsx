@@ -27,7 +27,7 @@ function CableModal({ open, cableForm, onChange, onClose, onSave, errors }) {
               type="number"
               min="0"
               value={cableForm.length}
-              onChange={(event) => onChange({ length: Number(event.target.value) })}
+              onChange={(event) => onChange({ length: Number(event.target.value), autoCalculated: false })}
             />
           </label>
           <label className="modal__label">
@@ -36,7 +36,7 @@ function CableModal({ open, cableForm, onChange, onClose, onSave, errors }) {
               type="number"
               min="0"
               value={cableForm.totalPrice}
-              onChange={(event) => onChange({ totalPrice: Number(event.target.value) })}
+              onChange={(event) => onChange({ totalPrice: Number(event.target.value), autoCalculated: false })}
             />
           </label>
         </div>

@@ -171,6 +171,7 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
           section: "",
           length: 0,
           totalPrice: 0,
+          autoCalculated: true,
         });
       } else if (draftCable.fromBoxId !== box.id) {
         const completed = {
