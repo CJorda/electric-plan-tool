@@ -36,6 +36,7 @@ function CanvasPage({
   onEditSelected,
   partsListOpen,
   onTogglePartsList,
+  hideStatusControls = false,
   onToggleComponentDiscount,
   onUpdateComponentCustomerDiscount,
   onToggleComponentActive,
@@ -45,6 +46,8 @@ function CanvasPage({
   statusLabels,
 }) {
   if (hideCanvas) return null;
+
+  console.log('[CanvasPage] partsListOpen=', partsListOpen);
 
   const groupedRows = useMemo(() => {
     const groups = boxes.map((box) => ({
@@ -90,7 +93,8 @@ function CanvasPage({
 
   const getDiscountedUnitPrice = (component) => {
     const base = Number(component.unitPrice) || 0;
-    const percent = Number(component.customerDiscountPercent) || 0;
+    let percent = Number(component.customerDiscountPercent) || 0;
+    percent = Math.max(0, Math.min(100, percent));
     if (base <= 0) return 0;
     return Math.max(0, base * (1 - percent / 100));
   };
@@ -148,11 +152,14 @@ function CanvasPage({
                             className="canvas__parts-input"
                             type="number"
                             min="0"
+                            max="100"
                             step="0.1"
-                            value={row.customerDiscountPercent ?? 0}
-                            onChange={(event) =>
-                              onUpdateComponentCustomerDiscount?.(row.boxId, row.id, event.target.value)
-                            }
+                            value={row.customerDiscountPercent ?? ""}
+                            onChange={(event) => {
+                              const raw = event.target.value;
+                              console.log('[CanvasPage] discount input', { boxId: row.boxId, id: row.id, raw });
+                              onUpdateComponentCustomerDiscount?.(row.boxId, row.id, raw);
+                            }}
                           />
                           <span>€{discountedUnit.toFixed(2)}</span>
                           <span>€{Number(row.total || 0).toFixed(2)}</span>
@@ -188,17 +195,21 @@ function CanvasPage({
 
   return (
     <div className="canvas__header-status">
-      <span className={`projects__status-pill projects__status-pill--${projectStatus}`}>{statusLabels[projectStatus] ?? projectStatus}</span>
-      <label className="projects__status-select" style={{marginLeft: 12}}>
-        <select
-          value={projectStatus}
-          onChange={e => onProjectStatusChange(e.target.value)}
-        >
-          {statusOptions.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-      </label>
+      {!hideStatusControls && (
+        <>
+          <span className={`projects__status-pill projects__status-pill--${projectStatus}`}>{statusLabels[projectStatus] ?? projectStatus}</span>
+          <label className="projects__status-select" style={{marginLeft: 12}}>
+            <select
+              value={projectStatus}
+              onChange={e => onProjectStatusChange(e.target.value)}
+            >
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
       <CanvasStage
         svgRef={svgRef}
         pan={pan}

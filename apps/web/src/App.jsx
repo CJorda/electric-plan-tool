@@ -343,7 +343,8 @@ function App() {
 
   const getDiscountedUnitPrice = (component) => {
     const base = Number(component.unitPrice) || 0;
-    const percent = Number(component.customerDiscountPercent) || 0;
+    let percent = Number(component.customerDiscountPercent) || 0;
+    percent = Math.max(0, Math.min(100, percent));
     if (base <= 0) return 0;
     return Math.max(0, base * (1 - percent / 100));
   };
@@ -400,6 +401,7 @@ function App() {
   };
 
   const toggleComponentDiscount = (boxId, componentId, nextApplied) => {
+    console.log('[App] toggleComponentDiscount', { boxId, componentId, nextApplied });
     if (boxId === "devices") {
       setDevices((prev) =>
         prev.map((device) => {
@@ -431,6 +433,7 @@ function App() {
   };
 
   const toggleComponentActive = (boxId, componentId, nextActive) => {
+    console.log('[App] toggleComponentActive', { boxId, componentId, nextActive });
     if (boxId === "devices") {
       setDevices((prev) =>
         prev.map((device) => {
@@ -470,19 +473,20 @@ function App() {
   };
 
   const updateComponentCustomerDiscount = (boxId, componentId, percent) => {
+    console.log('[App] updateComponentCustomerDiscount', { boxId, componentId, percent });
     if (boxId === "devices") {
       setDevices((prev) =>
         prev.map((device) => {
           if (device.id !== componentId) return device;
+          const raw = percent === "" ? "" : Number(percent);
+          const clamped = raw === "" ? "" : Math.max(0, Math.min(100, isNaN(raw) ? 0 : raw));
           const nextDevice = {
             ...device,
-            customerDiscountPercent: Number(percent) || 0,
+            customerDiscountPercent: clamped,
+            discountApplied: device.discountApplied || (clamped !== "" && Number(clamped) > 0),
           };
-          if (nextDevice.discountApplied) {
-            const discountedUnit = getDiscountedUnitPrice(nextDevice);
-            return { ...nextDevice, total: discountedUnit };
-          }
-          return nextDevice;
+          const discountedUnit = getDiscountedUnitPrice(nextDevice);
+          return nextDevice.discountApplied ? { ...nextDevice, total: discountedUnit } : nextDevice;
         })
       );
       return;
@@ -491,18 +495,17 @@ function App() {
     if (!targetBox) return;
     const nextComponents = targetBox.components.map((component) => {
       if (component.id !== componentId) return component;
+      const raw = percent === "" ? "" : Number(percent);
+      const clamped = raw === "" ? "" : Math.max(0, Math.min(100, isNaN(raw) ? 0 : raw));
       const nextComponent = {
         ...component,
-        customerDiscountPercent: Number(percent) || 0,
+        customerDiscountPercent: clamped,
+        discountApplied: component.discountApplied || (clamped !== "" && Number(clamped) > 0),
       };
-      if (nextComponent.discountApplied) {
-        const discountedUnit = getDiscountedUnitPrice(nextComponent);
-        return {
-          ...nextComponent,
-          total: discountedUnit * (Number(nextComponent.quantity) || 0),
-        };
-      }
-      return nextComponent;
+      const discountedUnit = getDiscountedUnitPrice(nextComponent);
+      return nextComponent.discountApplied
+        ? { ...nextComponent, total: discountedUnit * (Number(nextComponent.quantity) || 0) }
+        : nextComponent;
     });
     updateBox(boxId, { components: nextComponents });
   };
@@ -567,6 +570,39 @@ function App() {
     return `${text.slice(0, Math.max(0, maxChars - 1))}…`;
   };
 
+  const renderBoxLabel = (box) => {
+    const total = (box.components || []).reduce((sum, component) => sum + (component.total || 0), 0);
+    const nameMaxChars = Math.max(6, Math.floor((box.width || 140) / 9));
+    const nameText = truncateText(box.name, nameMaxChars);
+    const labelFontSize = (box.height || 100) < 80 ? 10 : 12;
+    const detailFontSize = (box.height || 100) < 80 ? 9 : 11;
+    return (
+      <g>
+        <clipPath id={`clip-${box.id}`}>
+          <rect x={box.x + 4} y={box.y + 4} width={box.width - 8} height={box.height - 8} rx={8} />
+        </clipPath>
+        <text
+          x={box.x + 10}
+          y={box.y + 22}
+          fontSize={labelFontSize}
+          fill="#e5e7eb"
+          clipPath={`url(#clip-${box.id})`}
+        >
+          {nameText}
+        </text>
+        <text
+          x={box.x + 10}
+          y={box.y + 40}
+          fontSize={detailFontSize}
+          fill="#9ca3af"
+          clipPath={`url(#clip-${box.id})`}
+        >
+          Total: €{Number(total || 0).toFixed(2)}
+        </text>
+      </g>
+    );
+  };
+
   return (
     <div className="app">
       <Sidebar
@@ -629,6 +665,7 @@ function App() {
         <ProjectsPage
           isProjectsSection={isProjectsSection && !isProjectDesignMode}
           activeSubsection={activeSubsection}
+          hideStatusControls={isProjectDesignMode}
           onOpenDesigner={(projectId, status) => {
             setActiveProjectId(projectId);
             setActiveProjectStatus(status || "draft");
@@ -639,74 +676,6 @@ function App() {
             setActiveSection("Proyectos");
             setActiveSubsection("Listado");
             setOpenSection("Proyectos");
-          <CanvasPage
-            hideCanvas={hideToolbar}
-            svgRef={svgRef}
-            pan={pan}
-            zoom={zoom}
-            backgroundImage={backgroundImage}
-            boxes={boxes}
-            cables={cables}
-            devices={devices}
-            selectedBoxId={selectedBoxId}
-            selectedDeviceId={selectedDeviceId}
-            draftCable={draftCable}
-            draftPolyline={draftPolyline}
-            tooltip={tooltip}
-            activeModeLabel={MODES.find((m) => m.id === activeMode)?.label || ""}
-            helpMessage={helpMessage}
-            onCanvasClick={handleCanvasClick}
-            onWheel={handleWheel}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onBoxPointerDown={handleBoxPointerDown}
-            onDevicePointerDown={handleDevicePointerDown}
-            onDeviceDoubleClick={handleDeviceDoubleClick}
-            onBoxDoubleClick={onBoxDoubleClick}
-            onBoxPointerMove={onBoxPointerMove}
-            onBoxPointerLeave={onBoxPointerLeave}
-            onDeleteCable={handleDeleteCable}
-            renderCablePoints={renderCablePoints}
-            renderCableLabelPosition={renderCableLabelPosition}
-            renderBoxLabel={renderBoxLabel}
-            onEditSelected={onEditSelected}
-            onTogglePartsList={onTogglePartsList}
-            projectStatus={activeProjectStatus}
-            onProjectStatusChange={setActiveProjectStatus}
-            statusOptions={STATUS_OPTIONS}
-            statusLabels={STATUS_LABELS}
-          />
-            const total = box.components.reduce((sum, component) => sum + component.total, 0);
-            const nameMaxChars = Math.max(6, Math.floor(box.width / 9));
-            const nameText = truncateText(box.name, nameMaxChars);
-            const labelFontSize = box.height < 80 ? 10 : 12;
-            const detailFontSize = box.height < 80 ? 9 : 11;
-            return (
-              <g>
-                <clipPath id={`clip-${box.id}`}>
-                  <rect x={box.x + 4} y={box.y + 4} width={box.width - 8} height={box.height - 8} rx={8} />
-                </clipPath>
-                <text
-                  x={box.x + 10}
-                  y={box.y + 22}
-                  fontSize={labelFontSize}
-                  fill="#e5e7eb"
-                  clipPath={`url(#clip-${box.id})`}
-                >
-                  {nameText}
-                </text>
-                <text
-                  x={box.x + 10}
-                  y={box.y + 40}
-                  fontSize={detailFontSize}
-                  fill="#9ca3af"
-                  clipPath={`url(#clip-${box.id})`}
-                >
-                  Total: €{total.toFixed(2)}
-                </text>
-              </g>
-            );
           }}
           onEditSelected={() => setIsBoxModalOpen(true)}
           onToggleComponentDiscount={toggleComponentDiscount}
@@ -714,6 +683,50 @@ function App() {
           onToggleComponentActive={toggleComponentActive}
           partsListOpen={isPartsListOpen}
           onTogglePartsList={() => setIsPartsListOpen((prev) => !prev)}
+        />
+
+        <CanvasPage
+          hideCanvas={hideToolbar}
+          svgRef={svgRef}
+          pan={pan}
+          zoom={zoom}
+          backgroundImage={backgroundImage}
+          boxes={boxes}
+          cables={cables}
+          devices={devices}
+          selectedBoxId={selectedBoxId}
+          selectedDeviceId={selectedDeviceId}
+          draftCable={draftCable}
+          draftPolyline={draftPolyline}
+          tooltip={tooltip}
+          activeModeLabel={MODES.find((m) => m.id === activeMode)?.label || ""}
+          helpMessage={helpMessage}
+          onCanvasClick={handleCanvasClick}
+          onWheel={handleWheel}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onBoxPointerDown={handleBoxPointerDown}
+          onDevicePointerDown={handleDevicePointerDown}
+          onDeviceDoubleClick={handleDeviceDoubleClick}
+          onBoxDoubleClick={handleBoxDoubleClick}
+          onBoxPointerMove={handleBoxPointerMove}
+          onBoxPointerLeave={handleBoxPointerLeave}
+          onDeleteCable={handleDeleteCable}
+          renderCablePoints={renderCablePoints}
+          renderCableLabelPosition={renderCableLabelPosition}
+          renderBoxLabel={renderBoxLabel}
+          onEditSelected={() => setIsBoxModalOpen(true)}
+            onTogglePartsList={() => setIsPartsListOpen((prev) => !prev)}
+            onToggleComponentDiscount={toggleComponentDiscount}
+            onUpdateComponentCustomerDiscount={updateComponentCustomerDiscount}
+            onToggleComponentActive={toggleComponentActive}
+          projectStatus={activeProjectStatus}
+          hideStatusControls={isProjectDesignMode}
+          onProjectStatusChange={setActiveProjectStatus}
+          partsListOpen={isPartsListOpen}
+          statusOptions={STATUS_OPTIONS}
+          statusLabels={STATUS_LABELS}
         />
       </div>
 

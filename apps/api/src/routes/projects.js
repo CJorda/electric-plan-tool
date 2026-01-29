@@ -31,6 +31,8 @@ projectsRouter.get("/", async (req, res) => {
 });
 
 projectsRouter.post("/", async (req, res) => {
+  console.log('[projects] POST /api/projects received');
+  console.log('[projects] body:', JSON.stringify(req.body).slice(0, 2000));
   const parsed = projectSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Datos inválidos", details: parsed.error.format() });
@@ -39,6 +41,7 @@ projectsRouter.post("/", async (req, res) => {
   const { name, type, notes, status, createdAt } = parsed.data;
   const id = randomUUID();
   try {
+    console.time('[projects] insert');
     const createdAtValue = parseCreatedAt(createdAt);
     const result = await query(
       `INSERT INTO projects (id, name, type, notes, status, created_at, updated_at)
@@ -46,9 +49,12 @@ projectsRouter.post("/", async (req, res) => {
        RETURNING id, name, type, notes, status, created_at, updated_at`,
       [id, name, type, notes ?? null, status, createdAtValue]
     );
+    console.timeEnd('[projects] insert');
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: "Error creando proyecto" });
+    console.error('[projects] error creating project:', error && error.stack ? error.stack : error);
+    // expose message to help debugging in dev
+    res.status(500).json({ error: "Error creando proyecto", message: String(error?.message || error) });
   }
 });
 

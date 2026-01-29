@@ -1,0 +1,7 @@
+.pd-modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.7);display:flex;align-items:center;justify-content:center;padding:20px;z-index:2000}
+.pd-modal{background:var(--panel);border:1px solid var(--border);padding:20px;border-radius:16px;max-width:420px;color:var(--text);display:flex;flex-direction:column;gap:12px}
+.pd-modal h3{margin:0;font-size:16px}
+.pd-modal p{margin:0;color:var(--muted);font-size:13px}
+.pd-actions{display:flex;gap:10px;justify-content:flex-end}
+.pd-cancel{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:600}
+.pd-confirm{background:#ef4444;border:none;color:#0b0f1a;border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700}

@@ -1,274 +1,125 @@
-import { useEffect, useState } from "react";
-import "./ProjectsPage.css";
+import { useState } from 'react';
+import './ProjectsPage.css';
+import ProjectList from '../../components/ProjectList/ProjectList.jsx';
+import ProjectForm from '../../components/ProjectForm/ProjectForm.jsx';
+import useProjects from '../../hooks/useProjects.js';
+import ProjectDeleteModal from '../../components/ProjectDeleteModal/ProjectDeleteModal.jsx';
 
-function ProjectsPage({
-  isProjectsSection,
-  activeSubsection,
-  onOpenDesigner,
-  onProjectCreated,
-}) {
-  const apiEnabled = import.meta.env.VITE_API_ENABLED === "true";
-  const [projectType, setProjectType] = useState("General");
-  const [projectName, setProjectName] = useState("");
-  const [projectNotes, setProjectNotes] = useState("");
-  const [projectDate, setProjectDate] = useState("");
-  const [projects, setProjects] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onProjectCreated, hideStatusControls = false }) {
+  const apiEnabled = import.meta.env.VITE_API_ENABLED === 'true';
   const [projectTotals, setProjectTotals] = useState(() => {
     try {
-      const stored = localStorage.getItem("projectTotals");
-      return stored ? JSON.parse(stored) : {};
+      const s = localStorage.getItem('projectTotals');
+      return s ? JSON.parse(s) : {};
     } catch {
       return {};
     }
   });
-  const [deleteCandidate, setDeleteCandidate] = useState(null);
 
-  const statusOptions = [
-    { value: "draft", label: "borrador" },
-    { value: "confirmed", label: "confirmado" },
-    { value: "published", label: "publicado" },
-    { value: "archived", label: "archivado" },
-  ];
+  const { projects, setProjects, isLoading, error, reload } = useProjects({ apiEnabled });
 
-  const statusLabels = {
-    draft: "borrador",
-    confirmed: "confirmado",
-    published: "publicado",
-    archived: "archivado",
-    local: "local",
+  const handleOpen = (projectId) => onOpenDesigner(projectId, projects.find((p) => p.id === projectId)?.status);
+
+  const [confirmProject, setConfirmProject] = useState(null);
+
+  const handleDelete = (project) => {
+    // open confirmation modal
+    setConfirmProject(project);
   };
 
-  const getNextStatus = (current) => {
-    switch (current) {
-      case "draft":
-        return { next: "confirmed", label: "Confirmar" };
-      case "confirmed":
-        return { next: "published", label: "Publicar" };
-      case "published":
-        return { next: "archived", label: "Archivar" };
-      case "archived":
-        return { next: "draft", label: "Reactivar" };
-      default:
-        return null;
+  const performDelete = (project) => {
+    if (!project) return;
+    const prevProjects = projects;
+    // optimistic update
+    setProjects((prev) => prev.filter((p) => p.id !== project.id));
+    setConfirmProject(null);
+
+    if (apiEnabled) {
+      fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .catch((err) => {
+          console.error('Failed to delete project', err);
+          alert('No se pudo eliminar el proyecto en el servidor. Revirtiendo.');
+          setProjects(prevProjects);
+        });
     }
   };
 
-  const isList = activeSubsection === "Listado";
-  const isNew = activeSubsection === "Nuevo";
+  const handleStatusChange = async (project, status) => {
+    if (!project || project.status === status) return;
+    // optimistic update
+    setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, status } : p)));
 
-  const readLocalProjects = () => {
-    try {
-      const stored = localStorage.getItem("projectsLocal");
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const writeLocalProjects = (items) => {
-    try {
-      localStorage.setItem("projectsLocal", JSON.stringify(items));
-    } catch {
-      // ignore
-    }
-  };
-
-  const removeLocalProject = (projectId) => {
-    setProjects((prev) => {
-      const next = prev.filter((project) => project.id !== projectId);
-      writeLocalProjects(next);
-      return next;
-    });
-  };
-
-  const removeProjectTotal = (projectId) => {
-    try {
-      const stored = localStorage.getItem("projectTotals");
-      const current = stored ? JSON.parse(stored) : {};
-      delete current[projectId];
-      localStorage.setItem("projectTotals", JSON.stringify(current));
-      setProjectTotals(current);
-    } catch {
-      // ignore
-    }
-  };
-
-  const addLocalProject = ({ name, type, notes, createdAt }) => {
-    const localProject = {
-      id: `local-${crypto.randomUUID()}`,
-      name,
-      type,
-      notes,
-      status: "local",
-      created_at: createdAt || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    setProjects((prev) => {
-      const next = [localProject, ...prev];
-      writeLocalProjects(next);
-      return next;
-    });
-    return localProject;
-  };
-
-  const loadProjects = async () => {
-    setIsLoading(true);
-    setError("");
-    if (!apiEnabled) {
-      setProjects(readLocalProjects());
-      setIsLoading(false);
-      return;
-    }
-    try {
-      const response = await fetch("/api/projects");
-      if (!response.ok) throw new Error("Error al cargar proyectos");
-      const data = await response.json();
-      setProjects(data.items || []);
-    } catch (err) {
-      setError("API no disponible. Usando proyectos locales.");
-      setProjects(readLocalProjects());
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isProjectsSection) {
-      const localProjects = readLocalProjects();
-      if (localProjects.length > 0) {
-        setProjects(localProjects);
-      }
+    // persist to API if enabled
+    if (apiEnabled) {
       try {
-        const storedTotals = localStorage.getItem("projectTotals");
-        setProjectTotals(storedTotals ? JSON.parse(storedTotals) : {});
-      } catch {
-        setProjectTotals({});
+        const res = await fetch(`/api/projects/${project.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...project, status }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const updated = await res.json();
+        setProjects((prev) => prev.map((p) => (p.id === project.id ? updated : p)));
+      } catch (err) {
+        // revert optimistic change
+        setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)));
+        console.error('Failed to update project status', err);
+        alert('No se pudo actualizar el estado en el servidor. Revirtiendo.');
       }
-      loadProjects();
-    }
-  }, [isProjectsSection]);
-
-  const handleCreateProject = async () => {
-    if (!projectName.trim()) {
-      setError("El nombre del proyecto es obligatorio.");
-      return;
-    }
-    setIsLoading(true);
-    setError("");
-    const createdAt = projectDate ? new Date(projectDate).toISOString() : new Date().toISOString();
-    const payload = {
-      name: projectName.trim(),
-      type: projectType,
-      notes: projectNotes.trim(),
-      createdAt,
-    };
-    if (!apiEnabled) {
-      const localProject = addLocalProject(payload);
-      setProjectName("");
-      setProjectNotes("");
-      setProjectDate("");
-      onProjectCreated();
-      onOpenDesigner(localProject.id);
-      setIsLoading(false);
-      return;
-    }
-    try {
-      const response = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) throw new Error("Error al crear proyecto");
-      const created = await response.json();
-      setProjects((prev) => [created, ...prev]);
-      setProjectName("");
-      setProjectNotes("");
-      setProjectDate("");
-      onProjectCreated();
-      onOpenDesigner(created.id);
-    } catch (err) {
-      setError("API no disponible. Proyecto guardado localmente.");
-      const localProject = addLocalProject(payload);
-      setProjectName("");
-      setProjectNotes("");
-      setProjectDate("");
-      onProjectCreated();
-      onOpenDesigner(localProject.id);
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const handleDeleteProject = async () => {
-    if (!deleteCandidate) return;
-    const projectId = deleteCandidate.id;
-    setError("");
-    if (!apiEnabled || deleteCandidate.status === "local") {
-      removeLocalProject(projectId);
-      removeProjectTotal(projectId);
-      setDeleteCandidate(null);
-      return;
+  const handleCreateProject = async (payload) => {
+    if (apiEnabled) {
+      try {
+        const res = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          let errBody = null;
+          try {
+            errBody = await res.json();
+          } catch (e) {
+            // ignore
+          }
+          const msg = errBody?.message || errBody?.error || `HTTP ${res.status}`;
+          throw new Error(msg);
+        }
+        const created = await res.json();
+        setProjects((prev) => [created, ...prev]);
+        onProjectCreated?.(created);
+        return created;
+      } catch (err) {
+        console.error('Failed to create project', err);
+        alert('No se pudo crear el proyecto en el servidor. ' + (err?.message || ''));
+        throw err;
+      }
     }
-    try {
-      const response = await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("Error eliminando proyecto");
-      setProjects((prev) => prev.filter((project) => project.id !== projectId));
-      removeProjectTotal(projectId);
-    } catch (err) {
-      setError("No se pudo eliminar el proyecto.");
-    } finally {
-      setDeleteCandidate(null);
-    }
-  };
 
-  const handleUpdateStatus = async (project, status) => {
-    if (!project || !status || project.status === status) return;
-    if (project.status === "local") return;
-    if (!apiEnabled) {
-      setError("API no disponible para actualizar el estado.");
-      return;
-    }
-    setError("");
-    try {
-      const response = await fetch(`/api/projects/${project.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: project.name,
-          type: project.type,
-          notes: project.notes ?? "",
-          status,
-        }),
-      });
-      if (!response.ok) throw new Error("Error actualizando estado");
-      const updated = await response.json();
-      setProjects((prev) => prev.map((item) => (item.id === project.id ? updated : item)));
-    } catch (err) {
-      setError("No se pudo actualizar el estado.");
-    }
+    // local fallback
+    const id = `local-${Date.now()}`;
+    const created = { id, name: payload.name || 'Proyecto local', status: payload.status || 'draft', createdAt: new Date().toISOString(), design: payload.design || null };
+    setProjects((prev) => [created, ...prev]);
+    onProjectCreated?.(created);
+    return created;
   };
 
   if (!isProjectsSection) return null;
 
-  const formatDate = (value) => {
-    if (!value) return "";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-    });
-  };
-
+  const isList = activeSubsection === 'Listado';
+  const isNew = activeSubsection === 'Nuevo';
 
   return (
     <section className="projects">
       <div className="projects__header">
         <div>
-          <h2>Proyectos · {isNew ? "Nuevo" : "Listado"}</h2>
+          <h2>Proyectos · {isNew ? 'Nuevo' : 'Listado'}</h2>
           <p>Organiza y gestiona tus proyectos eléctricos.</p>
         </div>
       </div>
@@ -279,123 +130,32 @@ function ProjectsPage({
           <p>Aquí aparecerán los proyectos guardados y el historial reciente.</p>
           {isLoading && <p className="projects__status">Cargando proyectos...</p>}
           {error && <p className="projects__status projects__status--error">{error}</p>}
-          {!isLoading && projects.length > 0 && (
-            <div className="projects__list">
-              {projects.map((project) => (
-                <div key={project.id} className="projects__card">
-                  <div className="projects__info">
-                    <div className="projects__title-row">
-                      <strong className="projects__name">{project.name}</strong>
-                      <span className={`projects__status-pill projects__status-pill--${project.status}`}>
-                        {statusLabels[project.status] ?? project.status}
-                      </span>
-                    </div>
-                    <div className="projects__meta">
-                      <span>{project.type}</span>
-                      {project.created_at && <span>· Creado: {formatDate(project.created_at)}</span>}
-                    </div>
-                  </div>
-                  <div className="projects__summary">
-                    <span className="projects__badge" aria-label="Total estimado">
-                      <span className="projects__badge-price">
-                        €{Number(projectTotals[project.id] ?? 0).toFixed(2)}
-                      </span>
-                      <span className="projects__badge-label">Total estimado</span>
-                    </span>
-                  </div>
-                  <div className="projects__actions">
-                    {project.status !== "local" && (
-                      <label className="projects__status-select">
-                        Estado
-                        <select
-                          value={project.status}
-                          onChange={(event) => handleUpdateStatus(project, event.target.value)}
-                        >
-                          {statusOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                    <button
-                      className="projects__action"
-                      type="button"
-                      onClick={() => onOpenDesigner(project.id)}
-                    >
-                      Abrir editor
-                    </button>
-                    <button
-                      className="projects__danger"
-                      type="button"
-                      onClick={() => setDeleteCandidate(project)}
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+          {!isLoading && (
+            <ProjectList
+              projects={projects}
+              totals={projectTotals}
+              onOpen={handleOpen}
+              onDelete={handleDelete}
+              onStatusChange={handleStatusChange}
+              hideStatusControls={hideStatusControls}
+            />
           )}
         </div>
       )}
 
       {isNew && (
         <div className="projects__form">
-          <label className="projects__label">
-            Nombre del proyecto
-            <input
-              value={projectName}
-              onChange={(event) => setProjectName(event.target.value)}
-              placeholder="Ej: Cuadro línea 3"
-            />
-          </label>
-          <label className="projects__label">
-            Tipo de proyecto
-            <input
-              value={projectType}
-              onChange={(event) => setProjectType(event.target.value)}
-              placeholder="Ej: CCM, distribución, PLC"
-            />
-          </label>
-          <label className="projects__label">
-            Fecha de creación
-            <input type="date" value={projectDate} onChange={(event) => setProjectDate(event.target.value)} />
-          </label>
-          <label className="projects__label projects__label--full">
-            Especificaciones básicas
-            <textarea
-              rows={4}
-              value={projectNotes}
-              onChange={(event) => setProjectNotes(event.target.value)}
-              placeholder="Requisitos, tensiones, número de cuadros, etc."
-            />
-          </label>
-          {error && <p className="projects__status projects__status--error">{error}</p>}
-          <button className="projects__action" type="button" onClick={handleCreateProject} disabled={isLoading}>
-            {isLoading ? "Creando..." : "Crear y abrir editor"}
-          </button>
+          <h3>Crear proyecto</h3>
+          <ProjectForm onCreate={handleCreateProject} />
         </div>
       )}
-      {deleteCandidate && (
-        <div className="projects__modal-overlay" role="dialog" aria-modal="true">
-          <div className="projects__modal">
-            <h3>¿Eliminar proyecto?</h3>
-            <p>
-              Se eliminará <strong>{deleteCandidate.name}</strong> de forma permanente.
-            </p>
-            <div className="projects__modal-actions">
-              <button className="projects__modal-cancel" type="button" onClick={() => setDeleteCandidate(null)}>
-                Cancelar
-              </button>
-              <button className="projects__modal-confirm" type="button" onClick={handleDeleteProject}>
-                Sí, eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
+      <ProjectDeleteModal
+        open={Boolean(confirmProject)}
+        project={confirmProject}
+        onCancel={() => setConfirmProject(null)}
+        onConfirm={performDelete}
+      />
     </section>
   );
 }

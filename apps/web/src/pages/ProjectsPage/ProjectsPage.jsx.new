@@ -1,0 +1,71 @@
+import { useState } from 'react';
+import './ProjectsPage.css';
+import ProjectList from '../../components/ProjectList/ProjectList.jsx';
+import useProjects from '../../hooks/useProjects.js';
+
+function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onProjectCreated }) {
+  const apiEnabled = import.meta.env.VITE_API_ENABLED === 'true';
+  const [projectTotals, setProjectTotals] = useState(() => {
+    try {
+      const s = localStorage.getItem('projectTotals');
+      return s ? JSON.parse(s) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const { projects, setProjects, isLoading, error, reload } = useProjects({ apiEnabled });
+
+  const handleOpen = (projectId) => onOpenDesigner(projectId, projects.find((p) => p.id === projectId)?.status);
+
+  const handleDelete = (project) => {
+    setProjects((prev) => prev.filter((p) => p.id !== project.id));
+  };
+
+  const handleStatusChange = async (project, status) => {
+    if (!project || project.status === status) return;
+    setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, status } : p)));
+  };
+
+  if (!isProjectsSection) return null;
+
+  const isList = activeSubsection === 'Listado';
+  const isNew = activeSubsection === 'Nuevo';
+
+  return (
+    <section className="projects">
+      <div className="projects__header">
+        <div>
+          <h2>Proyectos · {isNew ? 'Nuevo' : 'Listado'}</h2>
+          <p>Organiza y gestiona tus proyectos eléctricos.</p>
+        </div>
+      </div>
+
+      {isList && (
+        <div className="projects__placeholder">
+          <h3>Listado de proyectos</h3>
+          <p>Aquí aparecerán los proyectos guardados y el historial reciente.</p>
+          {isLoading && <p className="projects__status">Cargando proyectos...</p>}
+          {error && <p className="projects__status projects__status--error">{error}</p>}
+          {!isLoading && (
+            <ProjectList
+              projects={projects}
+              totals={projectTotals}
+              onOpen={handleOpen}
+              onDelete={handleDelete}
+              onStatusChange={handleStatusChange}
+            />
+          )}
+        </div>
+      )}
+
+      {isNew && (
+        <div className="projects__form">
+          <p>Crear proyecto (panel simplificado).</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+export default ProjectsPage;

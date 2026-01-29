@@ -46,7 +46,7 @@ function CanvasStage({
             Editar cuadro
           </button>
         )}
-        <button className="canvas__edit" type="button" onClick={onTogglePartsList}>
+        <button className="canvas__edit" type="button" onClick={() => { console.log('[CanvasStage] toggle parts list'); onTogglePartsList?.(); }}>
           Listado de piezas
         </button>
       </div>
