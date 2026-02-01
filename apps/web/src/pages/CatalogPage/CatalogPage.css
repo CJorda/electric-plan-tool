@@ -1,0 +1,162 @@
+.catalog {
+	margin: 20px 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.catalog__header h2 {
+	margin: 0;
+	font-size: 18px;
+}
+
+.catalog__header p {
+	margin: 4px 0 0;
+	color: var(--muted);
+	font-size: 13px;
+}
+
+.catalog__tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.catalog__tab {
+	background: var(--panel-strong);
+	border: 1px solid var(--border);
+	color: var(--text);
+	border-radius: 12px;
+	padding: 10px 14px;
+	cursor: pointer;
+	font-weight: 600;
+}
+
+.catalog__tab.is-active {
+	background: rgba(56, 189, 248, 0.2);
+	border-color: rgba(56, 189, 248, 0.45);
+}
+
+.catalog__content {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.catalog__content-panel {
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+	border-radius: 16px;
+	padding: 16px;
+	color: #0f172a;
+}
+
+.catalog__content .products,
+.catalog__content .categories,
+.catalog__content .manufacturers,
+.catalog__content .providers,
+.catalog__content .margins,
+.catalog__content .templates {
+	margin: 0;
+	background: transparent;
+	border: none;
+	padding: 0;
+}
+
+.catalog__content .catalog__skeleton-section {
+	margin: 0;
+}
+
+@media (max-width: 900px) {
+	.catalog {
+		margin: 16px;
+	}
+}
+
+@media (max-width: 640px) {
+	.catalog {
+		margin: 12px;
+	}
+
+	.catalog__tab {
+		flex: 1 1 140px;
+		text-align: center;
+	}
+}
+
+.catalog__skeleton-section {
+	margin: 20px 24px;
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 16px;
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.catalog__skeleton-header {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.catalog__skeleton-title {
+	height: 18px;
+	width: 180px;
+	border-radius: 10px;
+}
+
+.catalog__skeleton-subtitle {
+	height: 12px;
+	width: 260px;
+	border-radius: 8px;
+}
+
+.catalog__skeleton-controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.catalog__skeleton-chip {
+	height: 30px;
+	width: 140px;
+	border-radius: 10px;
+}
+
+.catalog__skeleton-button {
+	height: 30px;
+	width: 120px;
+	border-radius: 10px;
+}
+
+.catalog__skeleton-grid {
+	display: grid;
+	gap: 10px;
+}
+
+.catalog__skeleton-card {
+	height: 56px;
+	border-radius: 12px;
+}
+
+.catalog__skeleton-row {
+	height: 40px;
+	border-radius: 12px;
+}
+
+@media (max-width: 900px) {
+	.catalog__skeleton-section {
+		margin: 16px;
+		padding: 16px;
+	}
+}
+
+@media (max-width: 640px) {
+	.catalog__skeleton-section {
+		margin: 12px;
+		padding: 14px;
+	}
+}

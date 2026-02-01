@@ -1,35 +1,8 @@
 import pg from "pg";
+import { baseConfig } from "./config/db.js";
+import { env } from "./config/env.js";
 
 const { Pool } = pg;
-
-const parseDatabaseUrl = () => {
-  if (!process.env.DATABASE_URL) {
-    return null;
-  }
-  const url = new URL(process.env.DATABASE_URL);
-  const database = url.pathname?.replace(/^\//, "") || "electric_plan_tool";
-  const sslMode = url.searchParams.get("sslmode");
-  const ssl = sslMode === "require" ? { rejectUnauthorized: false } : undefined;
-  return {
-    host: url.hostname || "localhost",
-    port: Number(url.port || 5432),
-    user: decodeURIComponent(url.username || "postgres"),
-    password: decodeURIComponent(url.password || ""),
-    database,
-    ssl,
-  };
-};
-
-const envConfig = {
-  host: process.env.PGHOST || "localhost",
-  port: Number(process.env.PGPORT || 5432),
-  user: process.env.PGUSER || "postgres",
-  password: process.env.PGPASSWORD || "root",
-  database: process.env.PGDATABASE || "electric_plan_tool",
-  ssl: process.env.PGSSL === "true" ? { rejectUnauthorized: false } : undefined,
-};
-
-const baseConfig = parseDatabaseUrl() ?? envConfig;
 const pool = new Pool(baseConfig);
 
 const quoteIdentifier = (value) => `"${String(value).replace(/"/g, '""')}"`;
@@ -37,7 +10,7 @@ const quoteIdentifier = (value) => `"${String(value).replace(/"/g, '""')}"`;
 export const query = (text, params) => pool.query(text, params);
 
 export const ensureDatabase = async () => {
-  const adminDb = process.env.PGADMIN_DB || "postgres";
+  const adminDb = env.PGADMIN_DB || "postgres";
   const adminPool = new Pool({
     ...baseConfig,
     database: adminDb,
@@ -75,16 +48,35 @@ export const ensureCatalogTables = async () => {
     `CREATE TABLE IF NOT EXISTS categories (
       id UUID PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
+      parent_id UUID,
       description TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );`
+  );
+  await query("ALTER TABLE categories ADD COLUMN IF NOT EXISTS parent_id UUID");
+  await query(
+    `DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'categories_parent_id_fkey'
+      ) THEN
+        ALTER TABLE categories
+          ADD CONSTRAINT categories_parent_id_fkey
+          FOREIGN KEY (parent_id)
+          REFERENCES categories(id)
+          ON DELETE SET NULL;
+      END IF;
+    END
+    $$;`
   );
   await query(
     `CREATE TABLE IF NOT EXISTS products (
       id UUID PRIMARY KEY,
       category_id UUID NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
       name TEXT NOT NULL,
+      manufacturer TEXT,
+      distributor_id UUID,
       serial TEXT,
       distributor_price NUMERIC(12,2) NOT NULL DEFAULT 0,
       discount_price NUMERIC(12,2) NOT NULL DEFAULT 0,
@@ -94,10 +86,127 @@ export const ensureCatalogTables = async () => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );`
   );
+  await query("ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer TEXT");
+  await query("ALTER TABLE products ADD COLUMN IF NOT EXISTS distributor_id UUID");
+  await query(
+    `CREATE TABLE IF NOT EXISTS product_price_history (
+      id UUID PRIMARY KEY,
+      product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      distributor_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+      discount_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+      shipping_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'EUR',
+      note TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+  await query(
+    `CREATE TABLE IF NOT EXISTS manufacturers (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      contact_name TEXT,
+      email TEXT,
+      phone TEXT,
+      website TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+  await query(
+    `CREATE TABLE IF NOT EXISTS providers (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      contact_name TEXT,
+      email TEXT,
+      phone TEXT,
+      website TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+  await query("ALTER TABLE providers ADD COLUMN IF NOT EXISTS contact_name TEXT");
+  await query("ALTER TABLE providers ADD COLUMN IF NOT EXISTS email TEXT");
+  await query("ALTER TABLE providers ADD COLUMN IF NOT EXISTS phone TEXT");
+  await query("ALTER TABLE providers ADD COLUMN IF NOT EXISTS website TEXT");
+  await query("ALTER TABLE providers ADD COLUMN IF NOT EXISTS notes TEXT");
+  await query(
+    `DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'products_distributor_id_fkey'
+      ) THEN
+        ALTER TABLE products
+          ADD CONSTRAINT products_distributor_id_fkey
+          FOREIGN KEY (distributor_id)
+          REFERENCES providers(id)
+          ON DELETE SET NULL;
+      END IF;
+    END
+    $$;`
+  );
+  await query(
+    `CREATE TABLE IF NOT EXISTS category_provider_margins (
+      id UUID PRIMARY KEY,
+      category_id UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+      provider_id UUID NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+      margin_percent NUMERIC(6,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(category_id, provider_id)
+    );`
+  );
+  await query(
+    `CREATE TABLE IF NOT EXISTS price_templates (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+  await query(
+    `CREATE TABLE IF NOT EXISTS template_category_margins (
+      id UUID PRIMARY KEY,
+      template_id UUID NOT NULL REFERENCES price_templates(id) ON DELETE CASCADE,
+      category_id UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+      margin_percent NUMERIC(6,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(template_id, category_id)
+    );`
+  );
+};
+
+export const ensureAuthTables = async () => {
+  await query(
+    `CREATE TABLE IF NOT EXISTS users (
+      id UUID PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      name TEXT,
+      role TEXT NOT NULL DEFAULT 'user',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+  await query(
+    `CREATE TABLE IF NOT EXISTS refresh_tokens (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ,
+      UNIQUE(user_id, token_hash)
+    );`
+  );
 };
 
 export const initDatabase = async () => {
   await ensureDatabase();
   await ensureProjectsTable();
   await ensureCatalogTables();
+  await ensureAuthTables();
 };

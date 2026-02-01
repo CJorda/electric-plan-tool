@@ -1,6 +1,5 @@
 import React from 'react';
 import ProjectStatusBadge from '../ProjectStatus/ProjectStatusBadge.jsx';
-import ProjectStatusSelect from '../ProjectStatus/ProjectStatusSelect.jsx';
 
 export default function ProjectCard({ project, total, onOpen, onDelete, statusOptions, onStatusChange, hideStatusControls = false }) {
   return (
@@ -13,6 +12,10 @@ export default function ProjectCard({ project, total, onOpen, onDelete, statusOp
         <div className="projects__meta">
           <span>{project.type}</span>
           {project.created_at && <span>· Creado: {new Date(project.created_at).toLocaleDateString()}</span>}
+          {project.client && <span>· Cliente: {project.client}</span>}
+          {project.reference && <span>· Ref: {project.reference}</span>}
+          {project.address && <span>· Dirección: {project.address}</span>}
+          {project.versions_count !== undefined && <span>· Revisiones: {project.versions_count}</span>}
         </div>
       </div>
 
@@ -24,14 +27,11 @@ export default function ProjectCard({ project, total, onOpen, onDelete, statusOp
       </div>
 
       <div className="projects__actions">
-        {!hideStatusControls && project.status !== 'local' && (
-          <ProjectStatusSelect value={project.status} options={statusOptions} onChange={(v) => onStatusChange?.(project, v)} />
-        )}
         <button className="projects__action" type="button" onClick={() => onOpen(project.id)}>
           Abrir editor
         </button>
-        <button className="projects__danger" type="button" onClick={() => onDelete(project)}>
-          Eliminar
+        <button className="projects__danger projects__danger--icon" type="button" onClick={() => onDelete(project)} aria-label="Eliminar">
+          ×
         </button>
       </div>
     </div>

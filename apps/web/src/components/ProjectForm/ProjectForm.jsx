@@ -1,10 +1,14 @@
 import { useState } from 'react';
+import CustomSelect from "../ui/CustomSelect.jsx";
 import './ProjectForm.css';
 
 export default function ProjectForm({ apiEnabled = import.meta.env.VITE_API_ENABLED === 'true', onCreate }) {
   const [name, setName] = useState('');
-  const [status, setStatus] = useState('draft');
   const [type, setType] = useState('plan');
+  const [client, setClient] = useState('');
+  const [reference, setReference] = useState('');
+  const [address, setAddress] = useState('');
+  const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
 
   const submit = async (e) => {
@@ -12,11 +16,22 @@ export default function ProjectForm({ apiEnabled = import.meta.env.VITE_API_ENAB
     if (!name.trim()) return alert('El nombre es obligatorio');
     setLoading(true);
     try {
-      const payload = { name: name.trim(), status, type };
+      const payload = {
+        name: name.trim(),
+        status: 'draft',
+        type,
+        client: client.trim() || null,
+        reference: reference.trim() || null,
+        address: address.trim() || null,
+        notes: notes.trim() || null,
+      };
       const created = await onCreate(payload);
       setName('');
-      setStatus('draft');
       setType('plan');
+      setClient('');
+      setReference('');
+      setAddress('');
+      setNotes('');
       return created;
     } catch (err) {
       // error already handled by parent
@@ -34,21 +49,40 @@ export default function ProjectForm({ apiEnabled = import.meta.env.VITE_API_ENAB
 
       <label>
         Tipo
-        <select value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="plan">Plan</option>
-          <option value="installation">Instalación</option>
-          <option value="maintenance">Mantenimiento</option>
-        </select>
+        <CustomSelect
+          value={type}
+          options={[
+            { value: "plan", label: "Plan" },
+            { value: "installation", label: "Instalación" },
+            { value: "maintenance", label: "Mantenimiento" },
+          ]}
+          onChange={setType}
+        />
       </label>
 
       <label>
-        Estado
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="draft">Borrador</option>
-          <option value="confirmed">Confirmado</option>
-          <option value="published">Publicado</option>
-          <option value="archived">Archivado</option>
-        </select>
+        Cliente
+        <input value={client} onChange={(e) => setClient(e.target.value)} placeholder="Nombre del cliente" />
+      </label>
+
+      <label>
+        Referencia interna
+        <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Ej: OP-2026-014" />
+      </label>
+
+      <label>
+        Dirección
+        <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Dirección del proyecto" />
+      </label>
+
+      <label>
+        Notas
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Notas internas o del cliente"
+          rows={3}
+        />
       </label>
 
       <div className="project-form__actions">

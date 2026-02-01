@@ -2,16 +2,30 @@ import { Router } from "express";
 import { z } from "zod";
 import { query } from "../db.js";
 import { randomUUID } from "crypto";
+import { streamQuotePdf } from "../lib/quotePdf.js";
+import { requireAuth } from "../middleware/auth.js";
 
 export const projectsRouter = Router();
+
+projectsRouter.use(requireAuth);
 
 const projectSchema = z.object({
   name: z.string().min(1),
   type: z.string().min(1),
+  client: z.string().optional().nullable(),
+  reference: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   status: z.string().optional().default("draft"),
   createdAt: z.string().optional().nullable(),
 });
+
+const ensureProjectColumns = async () => {
+  await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS client text");
+  await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS reference text");
+  await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS address text");
+  await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS versions jsonb");
+};
 
 const parseCreatedAt = (value) => {
   if (!value) return null;
@@ -19,10 +33,22 @@ const parseCreatedAt = (value) => {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
+/**
+ * @openapi
+ * /api/projects:
+ *   get:
+ *     tags:
+ *       - Projects
+ *     summary: Lista proyectos
+ *     responses:
+ *       200:
+ *         description: Lista de proyectos
+ */
 projectsRouter.get("/", async (req, res) => {
   try {
+    await ensureProjectColumns();
     const result = await query(
-      "SELECT id, name, type, notes, status, created_at, updated_at FROM projects ORDER BY created_at DESC"
+      "SELECT id, name, type, client, reference, address, notes, status, created_at, updated_at, COALESCE(jsonb_array_length(versions), 0) AS versions_count FROM projects ORDER BY created_at DESC"
     );
     res.json({ items: result.rows });
   } catch (error) {
@@ -30,6 +56,28 @@ projectsRouter.get("/", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/projects:
+ *   post:
+ *     tags:
+ *       - Projects
+ *     summary: Crea un proyecto
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Proyecto creado
+ */
 projectsRouter.post("/", async (req, res) => {
   console.log('[projects] POST /api/projects received');
   console.log('[projects] body:', JSON.stringify(req.body).slice(0, 2000));
@@ -38,16 +86,17 @@ projectsRouter.post("/", async (req, res) => {
     return res.status(400).json({ error: "Datos inválidos", details: parsed.error.format() });
   }
 
-  const { name, type, notes, status, createdAt } = parsed.data;
+  const { name, type, client, reference, address, notes, status, createdAt } = parsed.data;
   const id = randomUUID();
   try {
+    await ensureProjectColumns();
     console.time('[projects] insert');
     const createdAtValue = parseCreatedAt(createdAt);
     const result = await query(
-      `INSERT INTO projects (id, name, type, notes, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()), NOW())
-       RETURNING id, name, type, notes, status, created_at, updated_at`,
-      [id, name, type, notes ?? null, status, createdAtValue]
+      `INSERT INTO projects (id, name, type, client, reference, address, notes, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, NOW()), NOW())
+       RETURNING id, name, type, client, reference, address, notes, status, created_at, updated_at`,
+      [id, name, type, client ?? null, reference ?? null, address ?? null, notes ?? null, status, createdAtValue]
     );
     console.timeEnd('[projects] insert');
     res.status(201).json(result.rows[0]);
@@ -58,10 +107,30 @@ projectsRouter.post("/", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/projects/{projectId}:
+ *   get:
+ *     tags:
+ *       - Projects
+ *     summary: Obtiene un proyecto por id
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Proyecto
+ *       404:
+ *         description: No encontrado
+ */
 projectsRouter.get("/:projectId", async (req, res) => {
   try {
+    await ensureProjectColumns();
     const result = await query(
-      "SELECT id, name, type, notes, status, created_at, updated_at FROM projects WHERE id = $1",
+      "SELECT id, name, type, client, reference, address, notes, status, created_at, updated_at, COALESCE(jsonb_array_length(versions), 0) AS versions_count FROM projects WHERE id = $1",
       [req.params.projectId]
     );
     if (result.rows.length === 0) {
@@ -73,6 +142,23 @@ projectsRouter.get("/:projectId", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/projects/{projectId}/design:
+ *   get:
+ *     tags:
+ *       - Projects
+ *     summary: Obtiene el diseño del proyecto
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Diseño
+ */
 projectsRouter.get("/:projectId/design", async (req, res) => {
   try {
     const result = await query("SELECT design FROM projects WHERE id = $1", [req.params.projectId]);
@@ -85,6 +171,170 @@ projectsRouter.get("/:projectId/design", async (req, res) => {
   }
 });
 
+// Build a lightweight quote JSON for a project
+projectsRouter.get("/:projectId/quote", async (req, res) => {
+  try {
+    if (req.params.projectId.startsWith("local-")) {
+      return res.status(400).json({ error: "Proyecto local no guardado. Guarda el proyecto antes de generar presupuesto." });
+    }
+    const result = await query("SELECT id, name, type, notes, status, design FROM projects WHERE id = $1", [req.params.projectId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Proyecto no encontrado" });
+    const project = result.rows[0];
+    const design = project.design || { boxes: [], cables: [] };
+
+    // Build items from boxes components and devices inside design (best-effort)
+    const items = [];
+    (design.boxes || []).forEach((box) => {
+      (box.components || []).forEach((c) => {
+        items.push({
+          type: 'component',
+          boxId: box.id,
+          boxName: box.name,
+          model: c.model || c.name,
+          quantity: Number(c.quantity) || 1,
+          unitPrice: Number(c.unitPrice) || 0,
+          customerDiscountPercent: Number(c.customerDiscountPercent) || 0,
+          discountApplied: Boolean(c.discountApplied),
+          total: Number(c.total) || 0,
+        });
+      });
+    });
+
+    const devices = (design.devices || []).map((d) => ({
+      type: 'device',
+      id: d.id,
+      model: d.model || d.name,
+      quantity: 1,
+      unitPrice: Number(d.unitPrice) || 0,
+      total: Number(d.total) || Number(d.unitPrice) || 0,
+    }));
+
+    const allItems = items.concat(devices);
+    const subtotal = allItems.reduce((s, it) => s + (Number(it.total) || (Number(it.unitPrice || 0) * Number(it.quantity || 1))), 0);
+    const quote = {
+      projectId: project.id,
+      name: project.name,
+      type: project.type,
+      notes: project.notes,
+      items: allItems,
+      subtotal,
+      taxes: 0,
+      total: subtotal,
+      generatedAt: new Date().toISOString(),
+    };
+    res.json(quote);
+  } catch (error) {
+    console.error('[projects] quote error', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: 'Error generando presupuesto' });
+  }
+});
+
+// Stream a styled PDF quote using pdfkit helper
+projectsRouter.get("/:projectId/quote.pdf", async (req, res) => {
+  try {
+    if (req.params.projectId.startsWith("local-")) {
+      return res.status(400).json({ error: "Proyecto local no guardado. Guarda el proyecto antes de generar PDF." });
+    }
+    const result = await query("SELECT id, name, type, notes, status, design FROM projects WHERE id = $1", [req.params.projectId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Proyecto no encontrado" });
+    const project = result.rows[0];
+    const design = project.design || { boxes: [], cables: [], devices: [] };
+    const items = [];
+    (design.boxes || []).forEach((box) => {
+      (box.components || []).forEach((c) => {
+        items.push({
+          desc: c.model || c.name,
+          qty: Number(c.quantity) || 1,
+          unit: Number(c.unitPrice) || 0,
+          total: Number(c.total) || ((Number(c.unitPrice) || 0) * (Number(c.quantity) || 1)),
+        });
+      });
+    });
+    (design.devices || []).forEach((d) => {
+      items.push({ desc: d.model || d.name || 'Dispositivo', qty: 1, unit: Number(d.unitPrice) || 0, total: Number(d.total) || Number(d.unitPrice) || 0 });
+    });
+
+    await streamQuotePdf(res, project, items, { taxes: 0 });
+  } catch (error) {
+    console.error('[projects] quote.pdf error', error && error.stack ? error.stack : error);
+    try { res.status(500).json({ error: 'Error generando PDF' }); } catch (e) { /* ignore */ }
+  }
+});
+
+// Versions: create and list versions (adds a JSONB column if needed)
+projectsRouter.post("/:projectId/versions", async (req, res) => {
+  const snapshot = req.body?.snapshot;
+  if (!snapshot) return res.status(400).json({ error: 'Snapshot requerido' });
+  try {
+    // ensure column exists
+    await query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS versions jsonb`);
+    const version = { id: randomUUID(), snapshot, createdAt: new Date().toISOString() };
+    await query(
+      `UPDATE projects SET versions = COALESCE(versions, '[]'::jsonb) || $1::jsonb WHERE id = $2`,
+      [JSON.stringify(version), req.params.projectId]
+    );
+    res.status(201).json(version);
+  } catch (error) {
+    console.error('[projects] versions error', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: 'Error guardando versión' });
+  }
+});
+
+projectsRouter.get("/:projectId/versions", async (req, res) => {
+  try {
+    const result = await query('SELECT versions FROM projects WHERE id = $1', [req.params.projectId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    res.json({ versions: result.rows[0].versions || [] });
+  } catch (error) {
+    console.error('[projects] get versions error', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: 'Error leyendo versiones' });
+  }
+});
+
+// Accept quote (mark project as confirmed and store acceptance info)
+projectsRouter.post("/:projectId/accept", async (req, res) => {
+  const who = req.body?.by || { name: 'cliente' };
+  try {
+    await query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS accepted_at timestamptz`);
+    await query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS accepted_by jsonb`);
+    const result = await query(
+      `UPDATE projects SET status = 'confirmed', accepted_at = NOW(), accepted_by = $1::jsonb, updated_at = NOW() WHERE id = $2 RETURNING id, status, accepted_at, accepted_by`,
+      [JSON.stringify(who), req.params.projectId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('[projects] accept error', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: 'Error al aceptar presupuesto' });
+  }
+});
+
+/**
+ * @openapi
+ * /api/projects/{projectId}/design:
+ *   put:
+ *     tags:
+ *       - Projects
+ *     summary: Actualiza el diseño del proyecto
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               design:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Diseño actualizado
+ */
 projectsRouter.put("/:projectId/design", async (req, res) => {
   const design = req.body?.design;
   if (!design || typeof design !== "object") {
@@ -104,19 +354,48 @@ projectsRouter.put("/:projectId/design", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/projects/{projectId}:
+ *   put:
+ *     tags:
+ *       - Projects
+ *     summary: Actualiza metadatos del proyecto
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Proyecto actualizado
+ */
 projectsRouter.put("/:projectId", async (req, res) => {
   const parsed = projectSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Datos inválidos", details: parsed.error.format() });
   }
-  const { name, type, notes, status } = parsed.data;
+  const { name, type, client, reference, address, notes, status } = parsed.data;
   try {
+    await ensureProjectColumns();
     const result = await query(
       `UPDATE projects
-       SET name = $1, type = $2, notes = $3, status = $4, updated_at = NOW()
-       WHERE id = $5
-       RETURNING id, name, type, notes, status, created_at, updated_at`,
-      [name, type, notes ?? null, status, req.params.projectId]
+       SET name = $1, type = $2, client = $3, reference = $4, address = $5, notes = $6, status = $7, updated_at = NOW()
+       WHERE id = $8
+       RETURNING id, name, type, client, reference, address, notes, status, created_at, updated_at`,
+      [name, type, client ?? null, reference ?? null, address ?? null, notes ?? null, status, req.params.projectId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Proyecto no encontrado" });
@@ -127,6 +406,25 @@ projectsRouter.put("/:projectId", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/projects/{projectId}:
+ *   delete:
+ *     tags:
+ *       - Projects
+ *     summary: Elimina un proyecto
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Eliminado
+ *       404:
+ *         description: No encontrado
+ */
 projectsRouter.delete("/:projectId", async (req, res) => {
   try {
     const result = await query("DELETE FROM projects WHERE id = $1", [req.params.projectId]);

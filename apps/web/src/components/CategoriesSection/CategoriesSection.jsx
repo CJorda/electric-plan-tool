@@ -1,4 +1,5 @@
 import { useState } from "react";
+import CustomSelect from "../ui/CustomSelect.jsx";
 import "./CategoriesSection.css";
 
 function CategoriesSection({
@@ -10,6 +11,44 @@ function CategoriesSection({
   onDeleteCategory,
 }) {
   const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [isSubcategory, setIsSubcategory] = useState(false);
+  const getCategoryLabel = (category) => {
+    if (!category?.parentId) return category?.name || "";
+    const parent = categories.find((item) => item.id === category.parentId);
+    return parent ? `${parent.name} / ${category.name}` : category.name;
+  };
+
+  const parentOptions = categories
+    .filter((category) => !category.parentId)
+    .map((category) => ({
+      id: category.id,
+      label: getCategoryLabel(category),
+    }));
+
+  const selectedParent = parentOptions.find((option) => option.id === categoryForm.parentId);
+  const parentName = selectedParent?.label || "";
+  const trimmedName = categoryForm.name.trim();
+  const isNameSameAsParent =
+    Boolean(isSubcategory && parentName) &&
+    trimmedName.toLowerCase() === parentName.split("/").pop()?.trim().toLowerCase();
+  const canSaveCategory =
+    trimmedName.length > 0 &&
+    (!isSubcategory || Boolean(categoryForm.parentId)) &&
+    !isNameSameAsParent;
+
+  const handleSaveCategory = () => {
+    if (!canSaveCategory) return;
+    const payload = {
+      name: categoryForm.name,
+      description: categoryForm.description,
+      parentId: isSubcategory ? categoryForm.parentId : "",
+    };
+    onCategoryFormChange(payload);
+    onAddCategory();
+    if (!isSubcategory) {
+      setIsSubcategory(false);
+    }
+  };
   return (
     <section className="products">
       <div className="products__header">
@@ -18,7 +57,7 @@ function CategoriesSection({
           <p>Gestiona las categorías disponibles en el catálogo.</p>
         </div>
         <div className="products__controls">
-          <button type="button" onClick={onAddCategory}>
+          <button type="button" onClick={handleSaveCategory} disabled={!canSaveCategory}>
             Añadir categoría
           </button>
         </div>
@@ -26,6 +65,7 @@ function CategoriesSection({
       <div className="products__table">
         <div className="products__table-head products__table-head--categories">
           <span>Categoría</span>
+          <span>Subcategoría de</span>
           <span>Descripción</span>
           <span>Acciones</span>
         </div>
@@ -35,14 +75,42 @@ function CategoriesSection({
             value={categoryForm.name}
             onChange={(event) => onCategoryFormChange({ name: event.target.value })}
           />
+          <div className="categories__parent">
+            <div className="categories__parent-row">
+              <label className="categories__checkbox">
+                <input
+                  type="checkbox"
+                  checked={isSubcategory}
+                  onChange={(event) => {
+                    const nextValue = event.target.checked;
+                    setIsSubcategory(nextValue);
+                    if (!nextValue) {
+                      onCategoryFormChange({ parentId: "" });
+                    }
+                  }}
+                />
+                Es subcategoría
+              </label>
+              <CustomSelect
+                value={categoryForm.parentId || ""}
+                options={[
+                  { value: "", label: "Selecciona padre" },
+                  ...parentOptions.map((option) => ({ value: option.id, label: option.label })),
+                ]}
+                onChange={(value) => onCategoryFormChange({ parentId: value })}
+                disabled={!isSubcategory}
+              />
+            </div>
+            {isNameSameAsParent && (
+              <span className="categories__hint">La subcategoría debe ser distinta al padre.</span>
+            )}
+          </div>
           <input
             placeholder="Descripción"
             value={categoryForm.description}
             onChange={(event) => onCategoryFormChange({ description: event.target.value })}
           />
-          <button className="categories__save" type="button" onClick={onAddCategory}>
-            Guardar
-          </button>
+          <span />
         </div>
         {categories.length === 0 ? (
           <div className="products__empty">Aún no hay categorías creadas.</div>
@@ -52,6 +120,16 @@ function CategoriesSection({
               <input
                 value={category.name}
                 onChange={(event) => onUpdateCategory(category.id, { name: event.target.value })}
+              />
+              <CustomSelect
+                value={category.parentId || ""}
+                options={[
+                  { value: "", label: "Sin padre" },
+                  ...parentOptions
+                    .filter((option) => option.id !== category.id)
+                    .map((option) => ({ value: option.id, label: option.label })),
+                ]}
+                onChange={(value) => onUpdateCategory(category.id, { parentId: value || null })}
               />
               <input
                 value={category.description}

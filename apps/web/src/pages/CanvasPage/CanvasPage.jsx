@@ -1,9 +1,13 @@
 import { useMemo, useState } from "react";
 import "./CanvasPage.css";
 import CanvasStage from "../../components/CanvasStage/CanvasStage.jsx";
+import React from 'react';
+const QuoteActions = React.lazy(() => import('../../components/Quote/QuoteActions.jsx'));
 
 function CanvasPage({
   hideCanvas,
+  isLoading = false,
+  authToken = '',
   svgRef,
   pan,
   zoom,
@@ -40,13 +44,29 @@ function CanvasPage({
   onToggleComponentDiscount,
   onUpdateComponentCustomerDiscount,
   onToggleComponentActive,
+  onUpdateCableColor,
   projectStatus,
   onProjectStatusChange,
   statusOptions,
   statusLabels,
+  projectId,
+  designSnapshot,
+  onRestoreDesign,
 }) {
   if (hideCanvas) return null;
-
+  if (isLoading) {
+    return (
+      <div className="canvas__editor canvas__editor--loading">
+        <div className="canvas__header-status">
+          <span className="canvas__skeleton-pill skeleton" />
+          <div className="canvas__header-spacer" />
+          <span className="canvas__skeleton-button skeleton" />
+          <span className="canvas__skeleton-button skeleton" />
+        </div>
+        <div className="canvas__loading-stage skeleton" />
+      </div>
+    );
+  }
   console.log('[CanvasPage] partsListOpen=', partsListOpen);
 
   const groupedRows = useMemo(() => {
@@ -104,8 +124,8 @@ function CanvasPage({
           unitPrice: unitPrice.toFixed(2),
           customerDiscountPercent: percent,
           discountApplied,
-          unitPriceWithDiscount: discountedUnit.toFixed(2),
-          total: Number(total).toFixed(2),
+            unitPriceWithDiscount: discountedUnit.toFixed(2),
+            total: Number(total).toFixed(2),
           type: item.type || "component",
         });
       });
@@ -275,22 +295,27 @@ function CanvasPage({
   }
 
   return (
-    <div className="canvas__header-status">
-      {!hideStatusControls && (
-        <>
+    <div className="canvas__editor">
+      <div className="canvas__header-status">
+        {!hideStatusControls && (
           <span className={`projects__status-pill projects__status-pill--${projectStatus}`}>{statusLabels[projectStatus] ?? projectStatus}</span>
-          <label className="projects__status-select" style={{marginLeft: 12}}>
-            <select
-              value={projectStatus}
-              onChange={e => onProjectStatusChange(e.target.value)}
-            >
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-        </>
-      )}
+        )}
+        <div className="canvas__header-spacer" />
+        {projectId && (
+          <React.Suspense fallback={null}>
+            <QuoteActions
+              projectId={projectId}
+              projectStatus={projectStatus}
+              statusOptions={statusOptions}
+              onStatusChange={onProjectStatusChange}
+              hideStatusControls={hideStatusControls}
+              designSnapshot={{ boxes, cables, devices }}
+              authToken={authToken}
+            />
+          </React.Suspense>
+        )}
+      </div>
+
       <CanvasStage
         svgRef={svgRef}
         pan={pan}
@@ -323,6 +348,7 @@ function CanvasPage({
         renderBoxLabel={renderBoxLabel}
         onEditSelected={onEditSelected}
         onTogglePartsList={onTogglePartsList}
+        onUpdateCableColor={onUpdateCableColor}
       />
     </div>
   );

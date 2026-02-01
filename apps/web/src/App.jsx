@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
-import { Boxes, Camera, Link2, MousePointer } from "lucide-react";
+import { Boxes, Camera, Link2, MousePointer, Home, FolderKanban, Package, Menu } from "lucide-react";
 import Sidebar from "./components/Sidebar/Sidebar.jsx";
 import Toolbar from "./components/Toolbar/Toolbar.jsx";
 import CatalogPage from "./pages/CatalogPage/CatalogPage.jsx";
+import DashboardPage from "./pages/DashboardPage/DashboardPage.jsx";
 import CanvasPage from "./pages/CanvasPage/CanvasPage.jsx";
 import ProjectsPage from "./pages/ProjectsPage/ProjectsPage.jsx";
+import LoginPage from "./pages/LoginPage/LoginPage.jsx";
+import { apiFetch } from "./lib/api.js";
 import BoxModal from "./components/modals/BoxModal/BoxModal.jsx";
 import CableModal from "./components/modals/CableModal/CableModal.jsx";
 import ImageModal from "./components/modals/ImageModal/ImageModal.jsx";
 import SizeModal from "./components/modals/SizeModal/SizeModal.jsx";
 import CameraModal from "./components/modals/CameraModal/CameraModal.jsx";
+import CableTypeModal from "./components/modals/CableTypeModal/CableTypeModal.jsx";
 import useCatalog from "./hooks/useCatalog.js";
+import useProjects from "./hooks/useProjects.js";
 import useCanvas from "./hooks/useCanvas.js";
 import "./App.css";
 
@@ -52,10 +57,57 @@ const STATUS_LABELS = {
 };
 
 function App() {
+  const [accessToken, setAccessToken] = useState(() => localStorage.getItem("accessToken") || "");
+  const [authUser, setAuthUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("authUser");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const decodeJwt = (token) => {
+    if (!token) return null;
+    try {
+      const payload = token.split(".")[1];
+      if (!payload) return null;
+      const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (!accessToken || authUser) return;
+    const payload = decodeJwt(accessToken);
+    if (!payload) return;
+    const derivedUser = {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role || "user",
+      name: payload.name,
+    };
+    localStorage.setItem("authUser", JSON.stringify(derivedUser));
+    setAuthUser(derivedUser);
+  }, [accessToken, authUser]);
   const [activeMode, setActiveMode] = useState("select");
-  const [activeSection, setActiveSection] = useState("Catálogo");
+  const [isCableTypeOpen, setIsCableTypeOpen] = useState(false);
+  const [selectedCableType, setSelectedCableType] = useState(null);
+
+  const handleModeChange = (mode) => {
+    if (mode === "addCable") {
+      setIsCableTypeOpen(true);
+      return;
+    }
+    setActiveMode(mode);
+  };
+  const [activeSection, setActiveSection] = useState("Inicio");
   const [activeSubsection, setActiveSubsection] = useState("Productos");
-  const [openSection, setOpenSection] = useState("Catálogo");
+  const [openSection, setOpenSection] = useState("Inicio");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isProjectDesignMode, setIsProjectDesignMode] = useState(false);
   const [activeProjectId, setActiveProjectId] = useState(null);
@@ -76,8 +128,10 @@ function App() {
     totalPrice: 20,
   });
   const [editingCableId, setEditingCableId] = useState(null);
+  const [isDesignLoading, setIsDesignLoading] = useState(false);
 
   const {
+    isLoading: isCatalogLoading,
     productForm,
     setProductForm,
     products,
@@ -87,7 +141,7 @@ function App() {
     categoryForm,
     setCategoryForm,
     categories,
-    productCategories,
+    productCategoryOptions,
     groupedProducts,
     handleAddProduct,
     handleProductInputKeyDown,
@@ -96,7 +150,40 @@ function App() {
     handleAddCategory,
     updateCategory,
     deleteCategory,
-  } = useCatalog();
+    providers,
+    providerForm,
+    setProviderForm,
+    updateProvider,
+    deleteProvider,
+    manufacturers,
+    manufacturerForm,
+    setManufacturerForm,
+    margins,
+    marginForm,
+    setMarginForm,
+    handleAddProvider,
+    handleAddManufacturer,
+    updateManufacturer,
+    deleteManufacturer,
+    handleAddMargin,
+    deleteMargin,
+    templates,
+    templateForm,
+    setTemplateForm,
+    selectedTemplateId,
+    setSelectedTemplateId,
+    templateMargins,
+    templateMarginForm,
+    setTemplateMarginForm,
+    handleAddTemplate,
+    handleAddTemplateMargin,
+    deleteTemplateMargin,
+  } = useCatalog({ authToken: accessToken });
+
+  const { projects, isLoading: isProjectsLoading } = useProjects({
+    apiEnabled: import.meta.env.VITE_API_ENABLED === "true",
+    authToken: accessToken,
+  });
 
   const {
     svgRef,
@@ -138,6 +225,7 @@ function App() {
   } = useCanvas({
     activeMode,
     boxSize,
+    selectedCableType,
     onOpenBoxModal: () => setIsBoxModalOpen(true),
     onOpenCableModal: (cable) => {
       setIsCableModalOpen(true);
@@ -153,11 +241,32 @@ function App() {
   });
 
   useEffect(() => {
-    if (!activeProjectId) return;
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 900px)");
+    const handleChange = () => {
+      if (media.matches) {
+        setIsSidebarCollapsed(true);
+      }
+    };
+    handleChange();
+    if (media.addEventListener) {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setIsDesignLoading(false);
+      return;
+    }
     let cancelled = false;
     const loadDesign = async () => {
       try {
-        const response = await fetch(`/api/projects/${activeProjectId}/design`);
+        setIsDesignLoading(true);
+        const response = await apiFetch(`/api/projects/${activeProjectId}/design`, {}, accessToken);
         if (!response.ok) throw new Error("Error cargando diseño");
         const data = await response.json();
         if (cancelled) return;
@@ -170,27 +279,50 @@ function App() {
           setCables([]);
           setDevices([]);
         }
+      } finally {
+        if (!cancelled) {
+          setIsDesignLoading(false);
+        }
       }
     };
     loadDesign();
     return () => {
       cancelled = true;
     };
-  }, [activeProjectId, setBoxes, setCables, setDevices]);
+  }, [activeProjectId, accessToken, setBoxes, setCables, setDevices]);
 
   useEffect(() => {
     if (!activeProjectId) return;
     const timeout = setTimeout(() => {
-      fetch(`/api/projects/${activeProjectId}/design`, {
+      apiFetch(`/api/projects/${activeProjectId}/design`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ design: { boxes, cables, devices } }),
-      }).catch(() => {
+      }, accessToken).catch(() => {
         // ignore
       });
     }, 500);
     return () => clearTimeout(timeout);
-  }, [activeProjectId, boxes, cables, devices]);
+  }, [activeProjectId, boxes, cables, devices, accessToken]);
+
+  const restoreDesign = async (design) => {
+    const nextBoxes = Array.isArray(design?.boxes) ? design.boxes : [];
+    const nextCables = Array.isArray(design?.cables) ? design.cables : [];
+    const nextDevices = Array.isArray(design?.devices) ? design.devices : [];
+    setBoxes(nextBoxes);
+    setCables(nextCables);
+    setDevices(nextDevices);
+    if (!activeProjectId || String(activeProjectId).startsWith("local-")) return;
+    try {
+      await apiFetch(`/api/projects/${activeProjectId}/design`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ design: { boxes: nextBoxes, cables: nextCables, devices: nextDevices } }),
+      }, accessToken);
+    } catch {
+      // ignore
+    }
+  };
 
   // Auto-calculate cable lengths and total prices when boxes/cable points change.
   useEffect(() => {
@@ -286,14 +418,19 @@ function App() {
   const sidebarSections = useMemo(
     () => [
       {
+        title: "Inicio",
+        icon: Home,
+        items: [],
+      },
+      {
         title: "Proyectos",
-        icon: Boxes,
-        items: ["Listado", "Nuevo"],
+        icon: FolderKanban,
+        items: ["Proyectos"],
       },
       {
         title: "Catálogo",
-        icon: Boxes,
-        items: ["Productos", "Categorías"],
+        icon: Package,
+        items: ["Productos", "Categorías", "Distribuidores", "Márgenes", "Plantillas", "Fabricantes"],
       },
     ],
     []
@@ -301,11 +438,13 @@ function App() {
 
   const handleSectionToggle = (sectionTitle) => {
     setActiveSection(sectionTitle);
-    setActiveSubsection(
-      sidebarSections.find((section) => section.title === sectionTitle)?.items?.[0] || ""
-    );
+    const nextItems = sidebarSections.find((section) => section.title === sectionTitle)?.items || [];
+    setActiveSubsection(nextItems[0] || "");
     setOpenSection((prev) => (prev === sectionTitle ? null : sectionTitle));
     setIsProjectDesignMode(false);
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches) {
+      setIsSidebarCollapsed(true);
+    }
   };
 
   const handleSubsectionChange = (sectionTitle, subsection) => {
@@ -313,21 +452,101 @@ function App() {
     setActiveSubsection(subsection);
     setOpenSection(sectionTitle);
     setIsProjectDesignMode(false);
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches) {
+      setIsSidebarCollapsed(true);
+    }
   };
 
   const selectedBox = boxes.find((box) => box.id === selectedBoxId) || null;
+  const isDashboardSection = activeSection === "Inicio";
   const isProductsSection = activeSection === "Catálogo" && activeSubsection === "Productos";
   const isCategoriesSection = activeSection === "Catálogo" && activeSubsection === "Categorías";
+  const isProvidersSection = activeSection === "Catálogo" && activeSubsection === "Distribuidores";
+  const isMarginsSection = activeSection === "Catálogo" && activeSubsection === "Márgenes";
+  const isTemplatesSection = activeSection === "Catálogo" && activeSubsection === "Plantillas";
+  const isManufacturersSection = activeSection === "Catálogo" && activeSubsection === "Fabricantes";
   const isProjectsSection = activeSection === "Proyectos";
   const hideToolbar =
-    (isProductsSection || isCategoriesSection || isProjectsSection) && !isProjectDesignMode;
+    (isDashboardSection || isProductsSection || isCategoriesSection || isProvidersSection || isMarginsSection || isTemplatesSection || isManufacturersSection || isProjectsSection) && !isProjectDesignMode;
+
+  const handleLogin = async ({ email, password }) => {
+    setLoginError("");
+    setLoginLoading(true);
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await apiFetch(
+        "/api/auth/login",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+          signal: controller.signal,
+        },
+        ""
+      );
+      clearTimeout(timeout);
+      const responseText = await res.text();
+      let data = {};
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = {};
+        }
+      }
+      if (!res.ok) {
+        const errorMessage =
+          data.error ||
+          responseText?.slice(0, 200) ||
+          `Error de login (${res.status})`;
+        setLoginError(errorMessage);
+        return;
+      }
+      const token = data.accessToken || data.access_token || data.token || "";
+      if (!token) {
+        const fallbackMessage = responseText
+          ? `Respuesta inesperada: ${responseText.slice(0, 200)}`
+          : "Token no recibido. Revisa la API.";
+        setLoginError(fallbackMessage);
+        return;
+      }
+      localStorage.setItem("accessToken", token);
+      setAccessToken(token);
+      const nextUser = data.user || null;
+      if (nextUser) {
+        localStorage.setItem("authUser", JSON.stringify(nextUser));
+        setAuthUser(nextUser);
+      } else if (token) {
+        const payload = decodeJwt(token);
+        if (payload) {
+          const derivedUser = {
+            id: payload.sub,
+            email: payload.email,
+            role: payload.role || "user",
+            name: payload.name,
+          };
+          localStorage.setItem("authUser", JSON.stringify(derivedUser));
+          setAuthUser(derivedUser);
+        }
+      }
+    } catch (error) {
+      const message =
+        error?.name === "AbortError"
+          ? "Tiempo de espera agotado. Revisa la API."
+          : "No se pudo iniciar sesión";
+      setLoginError(message);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
 
   const breadcrumbItems = useMemo(() => {
     const items = [
       { label: "Inicio", onClick: () => {
-        setActiveSection("Catálogo");
-        setActiveSubsection("Productos");
-        setOpenSection("Catálogo");
+        setActiveSection("Inicio");
+        setActiveSubsection("");
+        setOpenSection("Inicio");
         setIsProjectDesignMode(false);
         setIsPartsListOpen(false);
       } },
@@ -353,7 +572,7 @@ function App() {
       return items;
     }
 
-    if (activeSubsection) {
+    if (activeSubsection && activeSubsection !== activeSection) {
       items.push({ label: activeSubsection, onClick: () => {
         setActiveSubsection(activeSubsection);
         setIsProjectDesignMode(false);
@@ -369,10 +588,34 @@ function App() {
     return "Ctrl + arrastrar para desplazar. Rueda para zoom.";
   }, [activeMode]);
 
+  const categoryMarginMap = useMemo(() => {
+    const map = new Map();
+    (margins || []).forEach((margin) => {
+      const name = margin.categoryName;
+      const percent = Number(margin.marginPercent) || 0;
+      if (!name) return;
+      const current = map.get(name) ?? 0;
+      if (percent > current) map.set(name, percent);
+    });
+    return map;
+  }, [margins]);
+
   const boxTotals = boxes.map((box) => box.components.reduce((sum, component) => sum + component.total, 0));
   const boxesTotal = boxTotals.reduce((sum, total) => sum + total, 0);
+  const marginTotal = boxes.reduce((sum, box) => {
+    const components = box.components || [];
+    return (
+      sum +
+      components.reduce((componentSum, component) => {
+        const category = component.category || "";
+        const percent = categoryMarginMap.get(category) || 0;
+        const base = Number(component.total) || 0;
+        return componentSum + base * (percent / 100);
+      }, 0)
+    );
+  }, 0);
   const cablesTotal = cables.reduce((sum, cable) => sum + (Number(cable.totalPrice) || 0), 0);
-  const totalBudget = boxesTotal + cablesTotal;
+  const totalBudget = boxesTotal + cablesTotal + marginTotal;
 
   useEffect(() => {
     if (!activeProjectId) return;
@@ -648,21 +891,78 @@ function App() {
     );
   };
 
+  if (!accessToken) {
+    return (
+      <LoginPage
+        loading={loginLoading}
+        error={loginError}
+        onLogin={handleLogin}
+      />
+    );
+  }
+
   return (
     <div className="app">
-      <Sidebar
-        sections={sidebarSections}
-        activeSection={activeSection}
-        activeSubsection={activeSubsection}
-        openSection={openSection}
-        collapsed={isSidebarCollapsed}
-        onToggleCollapsed={() => setIsSidebarCollapsed((prev) => !prev)}
-        onSectionToggle={handleSectionToggle}
-        onSubsectionChange={handleSubsectionChange}
-      />
+        <Sidebar
+          sections={sidebarSections}
+          activeSection={activeSection}
+          activeSubsection={activeSubsection}
+          openSection={openSection}
+          collapsed={isSidebarCollapsed}
+          onToggleCollapsed={() => setIsSidebarCollapsed((prev) => !prev)}
+          onSectionToggle={handleSectionToggle}
+          onSubsectionChange={handleSubsectionChange}
+          user={authUser}
+          onLogout={async () => {
+            try {
+              await apiFetch("/api/auth/logout", { method: "POST" }, accessToken);
+            } catch {
+              // ignore
+            }
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("authUser");
+            setAccessToken("");
+            setAuthUser(null);
+          }}
+        />
+        <div className="main">
+        <Toolbar
+          visible={isProjectDesignMode}
+          zoom={zoom}
+          modes={MODES}
+          activeMode={activeMode}
+          onModeChange={(mode) => {
+            if (mode === "addCable") {
+              // open type selector before switching to addCable
+              setIsCableTypeOpen(true);
+              return;
+            }
+            setActiveMode(mode);
+          }}
+          onZoom={(delta) => setZoom((prev) => Math.min(5, Math.max(0.1, prev + delta)))}
+          onReset={resetView}
+          onOpenImage={() => setIsImageModalOpen(true)}
+          onOpenSize={() => setIsSizeModalOpen(true)}
+          totals={{ total: totalBudget, boxes: boxesTotal, cables: cablesTotal }}
+        />
 
-      <div className="main">
+        <CableTypeModal
+          open={isCableTypeOpen}
+          onClose={() => setIsCableTypeOpen(false)}
+          onSelect={(type) => {
+            setSelectedCableType(type);
+            setActiveMode("addCable");
+          }}
+        />
         <nav className="breadcrumb" aria-label="Breadcrumb">
+          <button
+            className="breadcrumb__menu"
+            type="button"
+            aria-label="Abrir menú"
+            onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+          >
+            <Menu size={18} />
+          </button>
           {breadcrumbItems.map((item, index) => (
             <span key={`${item.label}-${index}`} className="breadcrumb__item">
               <button className="breadcrumb__link" type="button" onClick={item.onClick}>
@@ -672,12 +972,20 @@ function App() {
             </span>
           ))}
         </nav>
+        {!isSidebarCollapsed && (
+          <button
+            className="sidebar__overlay"
+            type="button"
+            aria-label="Cerrar menú"
+            onClick={() => setIsSidebarCollapsed(true)}
+          />
+        )}
         <Toolbar
-          visible={!hideToolbar}
+          visible={!hideToolbar && !isProjectDesignMode}
           zoom={zoom}
           modes={MODES}
           activeMode={activeMode}
-          onModeChange={setActiveMode}
+          onModeChange={handleModeChange}
           onZoom={handleZoomButton}
           onReset={resetView}
           onOpenImage={() => setIsImageModalOpen(true)}
@@ -685,11 +993,40 @@ function App() {
           totals={{ boxes: boxesTotal, cables: cablesTotal, total: totalBudget }}
         />
 
+        <DashboardPage
+          isActive={isDashboardSection && !isProjectDesignMode}
+          isLoading={isProjectsLoading}
+          projects={projects}
+          totals={{ total: totalBudget }}
+          onNewProject={() => {
+            setActiveSection("Proyectos");
+            setActiveSubsection("Proyectos");
+            setOpenSection("Proyectos");
+          }}
+          onOpenProject={(project) => {
+            if (!project?.id) return;
+            setActiveProjectId(project.id);
+            setActiveProjectStatus(project.status || "draft");
+            setIsProjectDesignMode(true);
+            setActiveMode("select");
+          }}
+        />
+
         <CatalogPage
           isProductsSection={isProductsSection}
           isCategoriesSection={isCategoriesSection}
-          productCategories={productCategories}
+          isProvidersSection={isProvidersSection}
+          isMarginsSection={isMarginsSection}
+          isTemplatesSection={isTemplatesSection}
+          isManufacturersSection={isManufacturersSection}
+          activeSubsection={activeSubsection}
+          onSubsectionChange={handleSubsectionChange}
+          isLoading={isCatalogLoading}
+          authToken={accessToken}
+          productCategoryOptions={productCategoryOptions}
           categories={categories}
+          manufacturers={manufacturers}
+          providers={providers}
           productCategoryFilter={productCategoryFilter}
           onFilterChange={setProductCategoryFilter}
           productForm={productForm}
@@ -705,12 +1042,43 @@ function App() {
           onAddCategory={handleAddCategory}
           onUpdateCategory={updateCategory}
           onDeleteCategory={deleteCategory}
+          providers={providers}
+          providerForm={providerForm}
+          onProviderFormChange={(updates) => setProviderForm((prev) => ({ ...prev, ...updates }))}
+          onAddProvider={handleAddProvider}
+          onUpdateProvider={updateProvider}
+          onDeleteProvider={deleteProvider}
+          manufacturers={manufacturers}
+          manufacturerForm={manufacturerForm}
+          onManufacturerFormChange={(updates) =>
+            setManufacturerForm((prev) => ({ ...prev, ...updates }))
+          }
+          onAddManufacturer={handleAddManufacturer}
+          onUpdateManufacturer={updateManufacturer}
+          onDeleteManufacturer={deleteManufacturer}
+          margins={margins}
+          marginForm={marginForm}
+          onMarginFormChange={(updates) => setMarginForm((prev) => ({ ...prev, ...updates }))}
+          onAddMargin={handleAddMargin}
+          onDeleteMargin={deleteMargin}
+          templates={templates}
+          templateForm={templateForm}
+          onTemplateFormChange={(updates) => setTemplateForm((prev) => ({ ...prev, ...updates }))}
+          onAddTemplate={handleAddTemplate}
+          selectedTemplateId={selectedTemplateId}
+          onSelectTemplate={setSelectedTemplateId}
+          templateMargins={templateMargins}
+          templateMarginForm={templateMarginForm}
+          onTemplateMarginFormChange={(updates) => setTemplateMarginForm((prev) => ({ ...prev, ...updates }))}
+          onAddTemplateMargin={handleAddTemplateMargin}
+          onDeleteTemplateMargin={deleteTemplateMargin}
         />
 
         <ProjectsPage
           isProjectsSection={isProjectsSection && !isProjectDesignMode}
           activeSubsection={activeSubsection}
-          hideStatusControls={isProjectDesignMode}
+          hideStatusControls={false}
+          authToken={accessToken}
           onOpenDesigner={(projectId, status) => {
             setActiveProjectId(projectId);
             setActiveProjectStatus(status || "draft");
@@ -719,7 +1087,7 @@ function App() {
           }}
           onProjectCreated={() => {
             setActiveSection("Proyectos");
-            setActiveSubsection("Listado");
+            setActiveSubsection("Proyectos");
             setOpenSection("Proyectos");
           }}
           onEditSelected={() => setIsBoxModalOpen(true)}
@@ -732,6 +1100,11 @@ function App() {
 
         <CanvasPage
           hideCanvas={hideToolbar}
+          isLoading={isDesignLoading}
+          projectId={activeProjectId}
+          authToken={accessToken}
+          designSnapshot={{ boxes, cables, devices }}
+          onRestoreDesign={restoreDesign}
           svgRef={svgRef}
           pan={pan}
           zoom={zoom}
@@ -762,18 +1135,18 @@ function App() {
           renderCableLabelPosition={renderCableLabelPosition}
           renderBoxLabel={renderBoxLabel}
           onEditSelected={() => setIsBoxModalOpen(true)}
-            onTogglePartsList={() => setIsPartsListOpen((prev) => !prev)}
-            onToggleComponentDiscount={toggleComponentDiscount}
-            onUpdateComponentCustomerDiscount={updateComponentCustomerDiscount}
-            onToggleComponentActive={toggleComponentActive}
+          onTogglePartsList={() => setIsPartsListOpen((prev) => !prev)}
+          onToggleComponentDiscount={toggleComponentDiscount}
+          onUpdateComponentCustomerDiscount={updateComponentCustomerDiscount}
+          onToggleComponentActive={toggleComponentActive}
+          onUpdateCableColor={(cableId, updates) => updateCable(cableId, updates)}
           projectStatus={activeProjectStatus}
-          hideStatusControls={isProjectDesignMode}
+          hideStatusControls={false}
           onProjectStatusChange={setActiveProjectStatus}
           partsListOpen={isPartsListOpen}
           statusOptions={STATUS_OPTIONS}
           statusLabels={STATUS_LABELS}
         />
-      </div>
 
       <BoxModal
         open={isBoxModalOpen}
@@ -821,6 +1194,8 @@ function App() {
         onUrlChange={setBackgroundImage}
         onFileChange={handleBackgroundFile}
       />
+
+      </div>
 
       <SizeModal
         open={isSizeModalOpen}

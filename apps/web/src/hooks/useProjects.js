@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { apiFetch } from '../lib/api.js';
 
-export default function useProjects({ apiEnabled }) {
+export default function useProjects({ apiEnabled, authToken = '' }) {
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,7 +24,7 @@ export default function useProjects({ apiEnabled }) {
       return;
     }
     try {
-      const res = await fetch('/api/projects');
+      const res = await apiFetch('/api/projects', {}, authToken);
       if (!res.ok) throw new Error('Error');
       const data = await res.json();
       setProjects(data.items || []);
@@ -37,7 +38,7 @@ export default function useProjects({ apiEnabled }) {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [apiEnabled, authToken]);
 
   return { projects, setProjects, isLoading, error, reload: load };
 }

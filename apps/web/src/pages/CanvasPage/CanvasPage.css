@@ -3,7 +3,106 @@
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	padding: 16px 24px 0 24px;
-	background: var(--panel);
+	padding: 16px 24px;
+	background: #f8fafc;
+	color: #0f172a;
 	z-index: 2;
+}
+
+.canvas__editor {
+	display: flex;
+	flex-direction: column;
+	min-height: 100%;
+}
+
+.canvas__header-spacer {
+	flex: 1;
+}
+
+.quote-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.quote-actions__status .app-select__trigger {
+	height: 34px;
+	border-radius: 10px;
+}
+
+.quote-actions .canvas__export,
+.quote-actions .canvas__edit {
+	white-space: nowrap;
+}
+
+.canvas__export {
+	background: linear-gradient(135deg, #e2e8f0, #f8fafc);
+	color: #1f2937;
+	border: 1px solid #f8fafc;
+	padding: 8px 12px;
+	border-radius: 10px;
+	cursor: pointer;
+	font-size: 12px;
+	font-weight: 700;
+	box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
+	transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.canvas__export:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 10px 20px rgba(15, 23, 42, 0.3);
+}
+
+.canvas__export:active {
+	transform: translateY(0);
+	opacity: 0.9;
+}
+
+.canvas__editor--loading {
+	display: flex;
+	flex-direction: column;
+	min-height: 100%;
+}
+
+.canvas__loading-stage {
+	margin: 20px 24px;
+	min-height: 520px;
+	border-radius: 16px;
+	border: 1px dashed #cbd5e1;
+	background: #ffffff;
+}
+
+.canvas__skeleton-pill {
+	height: 22px;
+	width: 110px;
+	border-radius: 999px;
+}
+
+.canvas__skeleton-button {
+	height: 32px;
+	width: 110px;
+	border-radius: 10px;
+}
+
+@media (max-width: 900px) {
+	.canvas__header-status {
+		padding: 12px 16px;
+		flex-wrap: wrap;
+	}
+
+	.canvas__loading-stage {
+		margin: 16px;
+		min-height: 420px;
+	}
+}
+
+@media (max-width: 640px) {
+	.canvas__header-status {
+		padding: 10px 12px;
+	}
+
+	.canvas__loading-stage {
+		margin: 12px;
+		min-height: 360px;
+	}
 }

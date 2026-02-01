@@ -27,6 +27,7 @@ function CanvasStage({
   onBoxPointerMove,
   onBoxPointerLeave,
   onDeleteCable,
+  onUpdateCableColor,
   renderCablePoints,
   renderCableLabelPosition,
   renderBoxLabel,
@@ -35,21 +36,7 @@ function CanvasStage({
 }) {
   return (
     <main className="canvas">
-      <div className="canvas__toolbar">
-        <div className="canvas__mode">
-          Modo activo: <strong>{activeModeLabel}</strong>
-        </div>
-        <div className="canvas__help">{helpMessage}</div>
-        <div className="canvas__hint">Ctrl+Arrastrar para mover mapa · Rueda para zoom</div>
-        {selectedBoxId && activeModeLabel === "Seleccionar" && (
-          <button className="canvas__edit" type="button" onClick={onEditSelected}>
-            Editar cuadro
-          </button>
-        )}
-        <button className="canvas__edit" type="button" onClick={() => { console.log('[CanvasStage] toggle parts list'); onTogglePartsList?.(); }}>
-          Listado de piezas
-        </button>
-      </div>
+      {/* Toolbar is intentionally rendered by the page container (CanvasPage) */}
 
       <div className="canvas__stage">
         <svg
@@ -73,42 +60,7 @@ function CanvasStage({
               />
             )}
 
-            {cables.map((cable) => {
-              const points = renderCablePoints(cable);
-              const labelPosition = renderCableLabelPosition(cable);
-              return (
-                <g key={cable.id}>
-                  <polyline points={points} fill="none" stroke="#22c55e" strokeWidth="3" />
-                  {points
-                    .split(" ")
-                    .map((point) => point.split(",").map(Number))
-                    .map(([x, y], index) => (
-                      <circle key={`${cable.id}-p-${index}`} cx={x} cy={y} r={4} fill="#16a34a" />
-                    ))}
-                  <g className="cable__label" onClick={() => onDeleteCable(cable.id)}>
-                    <rect
-                      x={labelPosition.x - 60}
-                      y={labelPosition.y - 16}
-                      width={120}
-                      height={26}
-                      rx={8}
-                      fill="#0f172a"
-                      opacity="0.85"
-                    />
-                    <text
-                      x={labelPosition.x}
-                      y={labelPosition.y}
-                      textAnchor="middle"
-                      fill="#f8fafc"
-                      fontSize="12"
-                      dominantBaseline="middle"
-                    >
-                      {cable.model || "Cable"} · {cable.length || 0}m
-                    </text>
-                  </g>
-                </g>
-              );
-            })}
+            
 
             {draftCable && draftPolyline && (
               <polyline
@@ -164,6 +116,65 @@ function CanvasStage({
                 </text>
               </g>
             ))}
+
+            {cables.map((cable) => {
+              const points = renderCablePoints(cable);
+              const labelPosition = renderCableLabelPosition(cable);
+              const pointList = points ? points.split(" ").map((p) => p.split(",").map(Number)) : [];
+              const start = pointList[0] || [];
+              const end = pointList[pointList.length - 1] || [];
+              return (
+                <g key={cable.id}>
+                  <polyline
+                    className="cable cable--animated"
+                    points={points}
+                    fill="none"
+                    stroke={cable.color || "#22c55e"}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray={"12 8"}
+                  />
+                  {pointList.map(([x, y], index) => (
+                    <circle key={`${cable.id}-p-${index}`} cx={x} cy={y} r={4} fill={cable.color || "#16a34a"} />
+                  ))}
+                  {start.length === 2 && <circle cx={start[0]} cy={start[1]} r={6} fill={cable.color || "#22c55e"} opacity={0.95} />}
+                  {end.length === 2 && <circle cx={end[0]} cy={end[1]} r={6} fill={cable.color || "#22c55e"} opacity={0.95} />}
+                  <g className="cable__label" onClick={() => onDeleteCable(cable.id)}>
+                    <rect
+                      x={labelPosition.x - 60}
+                      y={labelPosition.y - 16}
+                      width={120}
+                      height={26}
+                      rx={8}
+                      fill="#0f172a"
+                      opacity="0.85"
+                    />
+                    <text
+                      x={labelPosition.x}
+                      y={labelPosition.y}
+                      textAnchor="middle"
+                      fill="#f8fafc"
+                      fontSize="12"
+                      dominantBaseline="middle"
+                    >
+                      {cable.model || "Cable"} · {cable.length || 0}m
+                    </text>
+                  </g>
+                  <foreignObject x={labelPosition.x + 68} y={labelPosition.y - 12} width={34} height={28}>
+                    <div xmlns="http://www.w3.org/1999/xhtml" style={{display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                      <input
+                        type="color"
+                        value={cable.color || '#22c55e'}
+                        onChange={(e) => onUpdateCableColor?.(cable.id, { color: e.target.value })}
+                        className="cable-color-input"
+                        aria-label={`Color del cable ${cable.model || ''}`}
+                      />
+                    </div>
+                  </foreignObject>
+                </g>
+              );
+            })}
           </g>
         </svg>
 

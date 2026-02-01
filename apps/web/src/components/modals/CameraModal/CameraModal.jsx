@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import CustomSelect from "../../ui/CustomSelect.jsx";
 import "./CameraModal.css";
 
 function CameraModal({ open, device, catalog, categoryName, onClose, onUpdate, onDelete }) {
@@ -55,10 +56,17 @@ function CameraModal({ open, device, catalog, categoryName, onClose, onUpdate, o
 
         <label className="modal__label">
           Modelo
-          <select
+          <CustomSelect
             value={device.model || ""}
-            onChange={(event) => {
-              const value = event.target.value;
+            options={
+              hasCatalog
+                ? catalog.map((item) => ({
+                    value: item.name,
+                    label: `${item.name} (${item.price}€)`,
+                  }))
+                : [{ value: "", label: "Sin modelos", disabled: true }]
+            }
+            onChange={(value) => {
               const found = catalog.find((item) => item.name === value);
               onUpdate({
                 model: value,
@@ -67,17 +75,7 @@ function CameraModal({ open, device, catalog, categoryName, onClose, onUpdate, o
               });
             }}
             disabled={!hasCatalog}
-          >
-            {hasCatalog ? (
-              catalog.map((item) => (
-                <option key={item.name} value={item.name}>
-                  {item.name} ({item.price}€)
-                </option>
-              ))
-            ) : (
-              <option value="">Sin modelos</option>
-            )}
-          </select>
+          />
         </label>
 
         <button className="modal__danger" type="button" onClick={onDelete}>

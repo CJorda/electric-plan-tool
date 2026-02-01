@@ -1,8 +1,12 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useMemo } from "react";
+import CustomSelect from "../ui/CustomSelect.jsx";
 import "./ProductsSection.css";
 
 function ProductsSection({
   categories,
+  manufacturers,
+  providers,
   categoryFilter,
   onFilterChange,
   productForm,
@@ -22,6 +26,45 @@ function ProductsSection({
     return Number.isFinite(raw) ? Math.max(0, raw) : 0;
   };
 
+  const categoryFilterOptions = useMemo(
+    () => [
+      { value: "Todas", label: "Todas" },
+      ...categories.map((category) => ({
+        value: category.name,
+        label: category.label,
+      })),
+    ],
+    [categories]
+  );
+
+  const categoryOptions = useMemo(() => {
+    if (categories.length === 0) {
+      return [{ value: "", label: "Sin categorías", disabled: true }];
+    }
+    return categories.map((category) => ({
+      value: category.name,
+      label: category.label,
+    }));
+  }, [categories]);
+
+  const manufacturerOptions = useMemo(
+    () =>
+      (manufacturers || []).map((manufacturer) => ({
+        value: manufacturer.name,
+        label: manufacturer.name,
+      })),
+    [manufacturers]
+  );
+
+  const distributorOptions = useMemo(
+    () =>
+      (providers || []).map((provider) => ({
+        value: provider.id,
+        label: provider.name,
+      })),
+    [providers]
+  );
+
   return (
     <section className="products">
       <div className="products__header">
@@ -32,18 +75,11 @@ function ProductsSection({
         <div className="products__controls">
           <label>
             Filtrar categoría
-            <select
-              className="products__select"
+            <CustomSelect
               value={categoryFilter}
-              onChange={(event) => onFilterChange(event.target.value)}
-            >
-              <option value="Todas">Todas</option>
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
+              options={categoryFilterOptions}
+              onChange={onFilterChange}
+            />
           </label>
           <button type="button" onClick={onAddProduct} disabled={!productForm.category}>
             Añadir producto
@@ -56,12 +92,14 @@ function ProductsSection({
           {[
             { key: "category", label: "Categoría" },
             { key: "name", label: "Producto" },
+            { key: "manufacturer", label: "Fabricante" },
+            { key: "distributorName", label: "Distribuidor" },
             { key: "serial", label: "Serie fabricante" },
             { key: "distributorPrice", label: "Precio PVP (€)" },
             { key: "discountPercent", label: "Descuento (%)" },
             { key: "discountPrice", label: "Precio con descuento (€)" },
             { key: "shippingCost", label: "Gastos envío (€)" },
-            { key: "leadTime", label: "Lead time" },
+            { key: "leadTime", label: "Tiempo entrega" },
           ].map((column) => (
             <button key={column.key} type="button" onClick={() => onSort(column.key)}>
               {column.label}
@@ -72,30 +110,37 @@ function ProductsSection({
         </div>
 
         <div className="products__table-row products__table-row--new">
-          <select
-            className="products__select"
+          <CustomSelect
             value={productForm.category}
-            onChange={(event) => onProductFormChange({ category: event.target.value })}
+            options={categoryOptions}
+            onChange={(value) => onProductFormChange({ category: value })}
             onKeyDown={onProductInputKeyDown}
-          >
-            {categories.length === 0 ? (
-              <option value="">Sin categorías</option>
-            ) : (
-              categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))
-            )}
-          </select>
+            disabled={categories.length === 0}
+          />
           <input
             placeholder="Nombre del producto"
+            name="productName"
             value={productForm.name}
             onChange={(event) => onProductFormChange({ name: event.target.value })}
             onKeyDown={onProductInputKeyDown}
           />
+          <CustomSelect
+            value={productForm.manufacturer}
+            options={manufacturerOptions}
+            placeholder="Fabricante"
+            onChange={(value) => onProductFormChange({ manufacturer: value })}
+            onKeyDown={onProductInputKeyDown}
+          />
+          <CustomSelect
+            value={productForm.distributorId}
+            options={distributorOptions}
+            placeholder="Distribuidor"
+            onChange={(value) => onProductFormChange({ distributorId: value })}
+            onKeyDown={onProductInputKeyDown}
+          />
           <input
             placeholder="Nº serie fabricante"
+            name="productSerial"
             value={productForm.serial}
             onChange={(event) => onProductFormChange({ serial: event.target.value })}
             onKeyDown={onProductInputKeyDown}
@@ -104,6 +149,8 @@ function ProductsSection({
             type="number"
             min="0"
             placeholder="Precio PVP"
+            className="products__input--small"
+            name="productPvp"
             value={productForm.distributorPrice}
             onChange={(event) => onProductFormChange({ distributorPrice: event.target.value })}
             onKeyDown={onProductInputKeyDown}
@@ -112,12 +159,15 @@ function ProductsSection({
             type="number"
             min="0"
             placeholder="Descuento %"
+            className="products__input--compact"
+            name="productDiscount"
             value={productForm.discountPercent}
             onChange={(event) => onProductFormChange({ discountPercent: event.target.value })}
             onKeyDown={onProductInputKeyDown}
           />
           <input
             className="products__readonly"
+            name="productDiscountPrice"
             value={getDiscountedPrice(productForm.distributorPrice, productForm.discountPercent).toFixed(2)}
             readOnly
             tabIndex={-1}
@@ -126,12 +176,16 @@ function ProductsSection({
             type="number"
             min="0"
             placeholder="Gastos envío"
+            className="products__input--wide"
+            name="productShipping"
             value={productForm.shippingCost}
             onChange={(event) => onProductFormChange({ shippingCost: event.target.value })}
             onKeyDown={onProductInputKeyDown}
           />
           <input
-            placeholder="Lead time"
+            placeholder="Tiempo entrega"
+            className="products__input--wide"
+            name="productLeadTime"
             value={productForm.leadTime}
             onChange={(event) => onProductFormChange({ leadTime: event.target.value })}
             onKeyDown={onProductInputKeyDown}
@@ -150,20 +204,26 @@ function ProductsSection({
               <div className="products__group-title">{category}</div>
               {items.map((product) => (
                 <div key={product.id} className="products__table-row">
-                  <select
-                    className="products__select"
+                  <CustomSelect
                     value={product.category}
-                    onChange={(event) => onUpdateProduct(product.id, { category: event.target.value })}
-                  >
-                    {categories.map((categoryOption) => (
-                      <option key={categoryOption} value={categoryOption}>
-                        {categoryOption}
-                      </option>
-                    ))}
-                  </select>
+                    options={categoryOptions}
+                    onChange={(value) => onUpdateProduct(product.id, { category: value })}
+                  />
                   <input
                     value={product.name}
                     onChange={(event) => onUpdateProduct(product.id, { name: event.target.value })}
+                  />
+                  <CustomSelect
+                    value={product.manufacturer || ""}
+                    options={manufacturerOptions}
+                    placeholder="Fabricante"
+                    onChange={(value) => onUpdateProduct(product.id, { manufacturer: value })}
+                  />
+                  <CustomSelect
+                    value={product.distributorId || ""}
+                    options={distributorOptions}
+                    placeholder="Distribuidor"
+                    onChange={(value) => onUpdateProduct(product.id, { distributorId: value })}
                   />
                   <input
                     value={product.serial}
@@ -173,6 +233,7 @@ function ProductsSection({
                     type="number"
                     min="0"
                     value={product.distributorPrice}
+                    className="products__input--small"
                     onChange={(event) =>
                       onUpdateProduct(product.id, { distributorPrice: Number(event.target.value) })
                     }
@@ -181,6 +242,7 @@ function ProductsSection({
                     type="number"
                     min="0"
                     value={product.discountPercent ?? 0}
+                    className="products__input--compact"
                     onChange={(event) =>
                       onUpdateProduct(product.id, { discountPercent: Number(event.target.value) })
                     }
@@ -195,12 +257,14 @@ function ProductsSection({
                     type="number"
                     min="0"
                     value={product.shippingCost}
+                    className="products__input--wide"
                     onChange={(event) =>
                       onUpdateProduct(product.id, { shippingCost: Number(event.target.value) })
                     }
                   />
                   <input
                     value={product.leadTime}
+                    className="products__input--wide"
                     onChange={(event) => onUpdateProduct(product.id, { leadTime: event.target.value })}
                   />
                 </div>

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 
-function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOpenDeviceModal }) {
+function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOpenDeviceModal, selectedCableType }) {
   const svgRef = useRef(null);
   const [boxes, setBoxes] = useState([]);
   const [cables, setCables] = useState([]);
@@ -24,6 +24,15 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
     const x = (event.clientX - rect.left - pan.x) / zoom;
     const y = (event.clientY - rect.top - pan.y) / zoom;
     return { x, y };
+  };
+
+  const defaultColorMap = {
+    ac220: "#ef4444",
+    modbus: "#f97316",
+    analog: "#f59e0b",
+    eth: "#0ea5e9",
+    fiber: "#8b5cf6",
+    dc24: "#22c55e",
   };
 
   const addBoxAtPoint = (point) => {
@@ -160,6 +169,8 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
 
   const handleBoxPointerDown = (event, box) => {
     event.stopPropagation();
+    const point = getCanvasPoint(event);
+
     if (activeMode === "addCable") {
       if (!draftCable) {
         setDraftCable({
@@ -167,29 +178,32 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
           fromBoxId: box.id,
           toBoxId: null,
           points: [],
-          model: "",
+          model: selectedCableType?.label || "",
           section: "",
           length: 0,
           totalPrice: 0,
           autoCalculated: true,
+          color: (selectedCableType && (selectedCableType.color || defaultColorMap[selectedCableType.id])) || "#22c55e",
         });
       } else if (draftCable.fromBoxId !== box.id) {
         const completed = {
           ...draftCable,
+          id: crypto.randomUUID(),
           toBoxId: box.id,
+          model: draftCable.model || selectedCableType?.label || "",
+          color: draftCable.color || ((selectedCableType && (selectedCableType.color || defaultColorMap[selectedCableType.id])) || "#22c55e"),
         };
-        setDraftCable(null);
-        setDraftCursor(null);
         setCables((prev) => [...prev, completed]);
+        setDraftCable(null);
         onOpenCableModal?.(completed);
         setSelectedBoxId(null);
       }
       return;
     }
+
     if (activeMode === "select") {
       setSelectedBoxId(box.id);
       setSelectedDeviceId(null);
-      const point = getCanvasPoint(event);
       setDraggingBox({
         id: box.id,
         offsetX: point.x - box.x,
@@ -279,9 +293,42 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
     const fromBox = boxes.find((box) => box.id === cable.fromBoxId);
     const toBox = boxes.find((box) => box.id === cable.toBoxId);
     if (!fromBox || !toBox) return "";
-    const start = { x: fromBox.x + fromBox.width / 2, y: fromBox.y + fromBox.height / 2 };
-    const end = { x: toBox.x + toBox.width / 2, y: toBox.y + toBox.height / 2 };
-    const allPoints = [start, ...cable.points, end];
+
+    const center = (b) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+
+    const intersectRectEdge = (rect, target) => {
+      const cx = rect.x + rect.width / 2;
+      const cy = rect.y + rect.height / 2;
+      const dx = target.x - cx;
+      const dy = target.y - cy;
+      const candidates = [];
+      if (dx !== 0) {
+        const tLeft = (rect.x - cx) / dx;
+        const tRight = (rect.x + rect.width - cx) / dx;
+        if (tLeft > 0) candidates.push(tLeft);
+        if (tRight > 0) candidates.push(tRight);
+      }
+      if (dy !== 0) {
+        const tTop = (rect.y - cy) / dy;
+        const tBottom = (rect.y + rect.height - cy) / dy;
+        if (tTop > 0) candidates.push(tTop);
+        if (tBottom > 0) candidates.push(tBottom);
+      }
+      if (candidates.length === 0) return { x: cx, y: cy };
+      const t = Math.min(...candidates);
+      return { x: cx + dx * t, y: cy + dy * t };
+    };
+
+    const fromCenter = center(fromBox);
+    const toCenter = center(toBox);
+
+    const firstTarget = cable.points && cable.points.length > 0 ? cable.points[0] : toCenter;
+    const lastTarget = cable.points && cable.points.length > 0 ? cable.points[cable.points.length - 1] : fromCenter;
+
+    const start = intersectRectEdge(fromBox, firstTarget);
+    const end = intersectRectEdge(toBox, lastTarget);
+
+    const allPoints = [start, ...(cable.points || []), end];
     return allPoints.map((point) => `${point.x},${point.y}`).join(" ");
   };
 
@@ -289,9 +336,12 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
     const fromBox = boxes.find((box) => box.id === cable.fromBoxId);
     const toBox = boxes.find((box) => box.id === cable.toBoxId);
     if (!fromBox || !toBox) return { x: 0, y: 0 };
-    const start = { x: fromBox.x + fromBox.width / 2, y: fromBox.y + fromBox.height / 2 };
-    const end = { x: toBox.x + toBox.width / 2, y: toBox.y + toBox.height / 2 };
-    return { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    const points = renderCablePoints(cable);
+    const pointList = points ? points.split(" ").map((p) => p.split(",").map(Number)) : [];
+    const start = pointList[0] || [];
+    const end = pointList[pointList.length - 1] || [];
+    if (start.length !== 2 || end.length !== 2) return { x: 0, y: 0 };
+    return { x: (start[0] + end[0]) / 2, y: (start[1] + end[1]) / 2 };
   };
 
   const draftPolyline = useMemo(() => {

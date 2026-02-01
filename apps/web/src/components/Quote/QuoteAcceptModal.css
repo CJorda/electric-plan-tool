@@ -1,0 +1,19 @@
+.qa-modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.75);display:flex;align-items:center;justify-content:center;padding:20px;z-index:2000}
+.qa-modal{background:var(--panel);border:1px solid var(--border);padding:24px;border-radius:18px;max-width:520px;width:100%;color:var(--text);display:flex;flex-direction:column;gap:16px;box-shadow:0 24px 60px rgba(15,23,42,0.55)}
+.qa-modal__header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.qa-modal__header h3{margin:0;font-size:16px}
+.qa-modal__close{background:var(--panel-strong);color:var(--text);border:none;border-radius:10px;padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600}
+.qa-modal__body{background:var(--panel-strong);border:1px solid var(--border);border-radius:14px;padding:16px}
+.qa-modal__label{display:flex;flex-direction:column;font-size:13px;color:var(--text);gap:6px}
+.qa-modal__label input{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--panel);color:var(--text);font-size:13px}
+.qa-modal__actions{display:flex;justify-content:flex-end;gap:10px}
+.qa-modal__cancel{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:600}
+.qa-modal__confirm{background:var(--accent-strong);border:none;color:#0b0f1a;border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700}
+.qa-modal__confirm:disabled{opacity:0.7;cursor:not-allowed}
+
+.qa-success{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding:8px 0}
+.qa-success h3{margin:0;font-size:16px}
+.qa-success p{margin:0;color:var(--muted);font-size:13px}
+.qa-check{width:64px;height:64px;border-radius:50%;background:rgba(34,197,94,0.15);border:2px solid rgba(34,197,94,0.4);color:#22c55e;display:grid;place-items:center;font-size:28px;font-weight:700;animation:qa-pop 0.3s ease}
+
+@keyframes qa-pop{from{transform:scale(0.9);opacity:0.6}to{transform:scale(1);opacity:1}}

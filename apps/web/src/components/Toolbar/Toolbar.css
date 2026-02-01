@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  background: var(--panel);
+  background: var(--panel-strong);
   border-bottom: none;
   gap: 16px;
 }
@@ -19,7 +19,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--panel-strong);
+  background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px 12px;
@@ -33,9 +33,9 @@
 }
 
 .toolbar__button.is-active {
-  background: rgba(56, 189, 248, 0.15);
-  border-color: rgba(56, 189, 248, 0.4);
-  color: var(--accent);
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  color: var(--text);
 }
 
 .toolbar__zoom {
@@ -45,12 +45,12 @@
 }
 
 .toolbar__budget {
-  background: linear-gradient(135deg, #0f172a, #111c33);
-  color: #f8fafc;
+  background: #ffffff;
+  color: #0f172a;
   padding: 10px 14px;
   border-radius: 12px;
   min-width: 220px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.4);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
 .toolbar__budget-label {
@@ -66,4 +66,32 @@
 .toolbar__budget-detail {
   font-size: 11px;
   opacity: 0.7;
+}
+
+@media (max-width: 900px) {
+  .toolbar {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+  }
+
+  .toolbar__group {
+    flex-wrap: wrap;
+  }
+
+  .toolbar__budget {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .toolbar {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .toolbar__button {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
 }

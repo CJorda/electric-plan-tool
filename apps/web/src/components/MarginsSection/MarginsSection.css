@@ -1,0 +1,15 @@
+.margins{margin:20px 24px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:16px;color:#0f172a}
+.margins__header h2{margin:0;font-size:18px}
+.margins__header p{margin:4px 0 0;color:#475569;font-size:13px}
+.margins__grid{display:grid;grid-template-columns:1fr;gap:16px}
+.margins__panel{background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.margins__panel h3{margin:0;font-size:15px}
+.margins__row{display:grid;grid-template-columns:1fr 1fr 120px auto;gap:10px}
+.margins__row input,.margins__row .app-select__trigger{padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#ffffff;color:#0f172a;font-size:13px}
+.margins__action{background:#111827;color:#f8fafc;border:none;border-radius:10px;padding:10px 12px;cursor:pointer;font-weight:700}
+.margins__table{display:flex;flex-direction:column;gap:8px}
+.margins__table-row{display:grid;grid-template-columns:1fr 1fr 90px auto;gap:10px;align-items:center;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#ffffff}
+.margins__table-row button{background:transparent;border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:10px;padding:6px 10px;cursor:pointer;font-weight:600}
+@media (max-width:900px){.margins__row{grid-template-columns:1fr;}}
+@media (max-width:900px){.margins{margin:16px;padding:16px}.margins__grid{grid-template-columns:1fr}.margins__table-row{grid-template-columns:1fr 1fr auto}}
+@media (max-width:640px){.margins{margin:12px;padding:14px}.margins__table-row{grid-template-columns:1fr}}

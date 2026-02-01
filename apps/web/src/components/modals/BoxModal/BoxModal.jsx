@@ -1,3 +1,4 @@
+import CustomSelect from "../../ui/CustomSelect.jsx";
 import "./BoxModal.css";
 
 function BoxModal({
@@ -45,30 +46,36 @@ function BoxModal({
         <div className="modal__grid">
           <label className="modal__label">
             Categoría
-            <select
+            <CustomSelect
               value={componentForm.category}
-              onChange={(event) =>
+              options={Object.keys(catalog).map((category) => ({
+                value: category,
+                label: category,
+              }))}
+              onChange={(value) =>
                 onComponentFormChange({
-                  category: event.target.value,
-                  model: catalog[event.target.value]?.[0]?.name || "",
-                  unitPrice: catalog[event.target.value]?.[0]?.price || 0,
+                  category: value,
+                  model: catalog[value]?.[0]?.name || "",
+                  unitPrice: catalog[value]?.[0]?.price || 0,
                 })
               }
-            >
-              {Object.keys(catalog).map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
+              disabled={Object.keys(catalog).length === 0}
+            />
           </label>
 
           <label className="modal__label">
             Modelo
-            <select
+            <CustomSelect
               value={componentForm.model}
-              onChange={(event) => {
-                const value = event.target.value;
+              options={
+                catalog[componentForm.category]?.length
+                  ? catalog[componentForm.category].map((item) => ({
+                      value: item.name,
+                      label: `${item.name} (${item.price}€)`,
+                    }))
+                  : [{ value: "", label: "Sin modelos", disabled: true }]
+              }
+              onChange={(value) => {
                 const price =
                   catalog[componentForm.category]?.find((item) => item.name === value)?.price ??
                   componentForm.unitPrice;
@@ -77,17 +84,8 @@ function BoxModal({
                   unitPrice: price,
                 });
               }}
-            >
-              {catalog[componentForm.category]?.length ? (
-                catalog[componentForm.category]?.map((item) => (
-                  <option key={item.name} value={item.name}>
-                    {item.name} ({item.price}€)
-                  </option>
-                ))
-              ) : (
-                <option value="">Sin modelos</option>
-              )}
-            </select>
+              disabled={!catalog[componentForm.category]?.length}
+            />
           </label>
 
           <label className="modal__label">

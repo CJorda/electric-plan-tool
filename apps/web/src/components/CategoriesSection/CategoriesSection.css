@@ -2,8 +2,101 @@
 
 .products__table-head--categories,
 .products__table-row--categories {
-	grid-template-columns: 1fr 2fr auto;
+	grid-template-columns: 1fr 1.4fr 2fr auto;
 }
+
+.categories__parent {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 6px;
+}
+
+.categories__parent-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.categories__parent-row .app-select__trigger {
+	flex: 1;
+	border-radius: 12px;
+	border: 1px solid var(--border);
+	background: #ffffff;
+	padding: 8px 12px;
+	font-size: 13px;
+	box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+	transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.categories__parent-row .app-select__trigger:focus-visible {
+	outline: none;
+	border-color: #38bdf8;
+	box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+}
+
+.categories__checkbox {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+	color: var(--text);
+	background: linear-gradient(135deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0.02));
+	border: 1px solid rgba(148, 163, 184, 0.4);
+	border-radius: 999px;
+	padding: 6px 14px;
+	width: fit-content;
+}
+
+.categories__checkbox input {
+	appearance: none;
+	width: 16px;
+	height: 16px;
+	border-radius: 5px;
+	border: 1px solid var(--border);
+	background: #ffffff;
+	position: relative;
+	transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.categories__checkbox input::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 5px;
+	height: 9px;
+	border: solid #ffffff;
+	border-width: 0 2px 2px 0;
+	transform: translate(-50%, -55%) rotate(45deg) scale(0);
+	transition: transform 0.2s ease;
+}
+
+.categories__checkbox input:checked {
+	border-color: #38bdf8;
+	background: #38bdf8;
+	box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
+
+.categories__checkbox input:checked::after {
+	transform: translate(-50%, -55%) rotate(45deg) scale(1);
+}
+
+.categories__checkbox input:focus-visible {
+	outline: none;
+	border-color: #38bdf8;
+	box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
+
+.categories__parent-row .app-select__trigger:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.categories__hint {
+	font-size: 11px;
+	color: #b91c1c;
+}
+
 
 .categories__delete {
 	border: 1px solid rgba(248, 113, 113, 0.5);
@@ -16,16 +109,6 @@
 	justify-self: end;
 }
 
-.categories__save {
-	border: 1px solid var(--border);
-	background: var(--panel-strong);
-	color: var(--text);
-	border-radius: 10px;
-	padding: 8px 12px;
-	cursor: pointer;
-	font-weight: 600;
-	justify-self: end;
-}
 
 .categories__modal-overlay {
 	position: fixed;
