@@ -168,3 +168,18 @@
 	cursor: pointer;
 	font-weight: 700;
 }
+
+.categories__action {
+	background: rgb(17, 24, 39);
+	color: #f8fafc;
+	border: none;
+	border-radius: 10px;
+	padding: 10px 14px;
+	cursor: pointer;
+	font-weight: 700;
+}
+
+.categories__action:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}

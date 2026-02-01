@@ -1,5 +1,12 @@
 import { useMemo, useRef, useState } from "react";
 
+const createId = () => {
+  if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
 function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOpenDeviceModal, selectedCableType }) {
   const svgRef = useRef(null);
   const [boxes, setBoxes] = useState([]);
@@ -37,7 +44,7 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
 
   const addBoxAtPoint = (point) => {
     const newBox = {
-      id: crypto.randomUUID(),
+      id: createId(),
       x: point.x - boxSize.width / 2,
       y: point.y - boxSize.height / 2,
       width: boxSize.width,
@@ -54,7 +61,7 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
 
   const addDeviceAtPoint = (point) => {
     const newDevice = {
-      id: crypto.randomUUID(),
+      id: createId(),
       x: point.x,
       y: point.y,
       type: "camera",
@@ -174,7 +181,7 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
     if (activeMode === "addCable") {
       if (!draftCable) {
         setDraftCable({
-          id: crypto.randomUUID(),
+          id: createId(),
           fromBoxId: box.id,
           toBoxId: null,
           points: [],
@@ -188,7 +195,7 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
       } else if (draftCable.fromBoxId !== box.id) {
         const completed = {
           ...draftCable,
-          id: crypto.randomUUID(),
+          id: createId(),
           toBoxId: box.id,
           model: draftCable.model || selectedCableType?.label || "",
           color: draftCable.color || ((selectedCableType && (selectedCableType.color || defaultColorMap[selectedCableType.id])) || "#22c55e"),

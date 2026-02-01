@@ -162,23 +162,27 @@ function CatalogPage({
     <section className="catalog">
       <div className="catalog__content">
         {isManufacturersSection ? (
-          <ManufacturersSection
-            manufacturers={manufacturers}
-            manufacturerForm={manufacturerForm}
-            onManufacturerFormChange={onManufacturerFormChange}
-            onAddManufacturer={onAddManufacturer}
-            onUpdateManufacturer={onUpdateManufacturer}
-            onDeleteManufacturer={onDeleteManufacturer}
-          />
+          <div className="catalog__content-panel">
+            <ManufacturersSection
+              manufacturers={manufacturers}
+              manufacturerForm={manufacturerForm}
+              onManufacturerFormChange={onManufacturerFormChange}
+              onAddManufacturer={onAddManufacturer}
+              onUpdateManufacturer={onUpdateManufacturer}
+              onDeleteManufacturer={onDeleteManufacturer}
+            />
+          </div>
         ) : isProvidersActive ? (
-          <ProvidersSection
-            providers={providers}
-            providerForm={providerForm}
-            onProviderFormChange={onProviderFormChange}
-            onAddProvider={onAddProvider}
-            onUpdateProvider={onUpdateProvider}
-            onDeleteProvider={onDeleteProvider}
-          />
+          <div className="catalog__content-panel">
+            <ProvidersSection
+              providers={providers}
+              providerForm={providerForm}
+              onProviderFormChange={onProviderFormChange}
+              onAddProvider={onAddProvider}
+              onUpdateProvider={onUpdateProvider}
+              onDeleteProvider={onDeleteProvider}
+            />
+          </div>
         ) : (
           <div className="catalog__content-panel">
             {isProductsSection && (

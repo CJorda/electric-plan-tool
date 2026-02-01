@@ -56,8 +56,13 @@ function CategoriesSection({
           <h2>Catálogo · Categorías</h2>
           <p>Gestiona las categorías disponibles en el catálogo.</p>
         </div>
-        <div className="products__controls">
-          <button type="button" onClick={handleSaveCategory} disabled={!canSaveCategory}>
+        <div className="products__controls products__controls--right">
+          <button
+            className="categories__action"
+            type="button"
+            onClick={handleSaveCategory}
+            disabled={!canSaveCategory}
+          >
             Añadir categoría
           </button>
         </div>

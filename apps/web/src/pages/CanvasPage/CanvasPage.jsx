@@ -300,6 +300,11 @@ function CanvasPage({
         {!hideStatusControls && (
           <span className={`projects__status-pill projects__status-pill--${projectStatus}`}>{statusLabels[projectStatus] ?? projectStatus}</span>
         )}
+        {onTogglePartsList && (
+          <button className="canvas__edit" type="button" onClick={onTogglePartsList}>
+            Listado de piezas
+          </button>
+        )}
         <div className="canvas__header-spacer" />
         {projectId && (
           <React.Suspense fallback={null}>

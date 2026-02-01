@@ -32,7 +32,12 @@ const BOX_SIZES = {
   large: { width: 200, height: 140, label: "Grande" },
 };
 
-const createId = () => crypto.randomUUID();
+const createId = () => {
+  if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
 const DEFAULT_COMPONENT_FORM = {
   category: "",

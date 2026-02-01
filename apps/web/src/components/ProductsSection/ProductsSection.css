@@ -1,3 +1,11 @@
+.products__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .products {
   margin: 20px 24px;
   background: #f8fafc;
@@ -28,6 +36,11 @@
   flex-wrap: wrap;
 }
 
+.products__controls--right {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
 .products__controls label {
   display: flex;
   flex-direction: column;
@@ -53,6 +66,21 @@
   padding: 10px 14px;
   cursor: pointer;
   font-weight: 600;
+}
+
+.products__controls .categories__action {
+  background: #111827;
+  color: #f8fafc;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.products__controls .categories__action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .products__controls button:disabled {
