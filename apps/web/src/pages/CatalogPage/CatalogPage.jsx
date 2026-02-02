@@ -28,6 +28,7 @@ function CatalogPage({
   onSort,
   sortState,
   onUpdateProduct,
+  onDeleteProduct,
   categoryForm,
   onCategoryFormChange,
   onAddCategory,
@@ -200,6 +201,7 @@ function CatalogPage({
                 onSort={onSort}
                 sortState={sortState}
                 onUpdateProduct={onUpdateProduct}
+                onDeleteProduct={onDeleteProduct}
               />
             )}
 

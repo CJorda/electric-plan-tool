@@ -1,7 +1,17 @@
 import React from 'react';
 import ProjectStatusBadge from '../ProjectStatus/ProjectStatusBadge.jsx';
 
-export default function ProjectCard({ project, total, onOpen, onDelete, statusOptions, onStatusChange, hideStatusControls = false }) {
+export default function ProjectCard({
+  project,
+  total,
+  onOpen,
+  onDelete,
+  onAttachments,
+  attachmentsCount = 0,
+  statusOptions,
+  onStatusChange,
+  hideStatusControls = false,
+}) {
   return (
     <div className="projects__card">
       <div className="projects__info">
@@ -29,6 +39,13 @@ export default function ProjectCard({ project, total, onOpen, onDelete, statusOp
       <div className="projects__actions">
         <button className="projects__action" type="button" onClick={() => onOpen(project.id)}>
           Abrir editor
+        </button>
+        <button
+          className="projects__action"
+          type="button"
+          onClick={() => onAttachments?.(project)}
+        >
+          Adjuntos ({attachmentsCount})
         </button>
         <button className="projects__danger projects__danger--icon" type="button" onClick={() => onDelete(project)} aria-label="Eliminar">
           ×

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Boxes, Camera, Link2, MousePointer, Home, FolderKanban, Package, Menu } from "lucide-react";
+import { Boxes, Camera, Link2, MousePointer, Home, FolderKanban, Package, Menu, Users } from "lucide-react";
 import Sidebar from "./components/Sidebar/Sidebar.jsx";
 import Toolbar from "./components/Toolbar/Toolbar.jsx";
 import CatalogPage from "./pages/CatalogPage/CatalogPage.jsx";
 import DashboardPage from "./pages/DashboardPage/DashboardPage.jsx";
 import CanvasPage from "./pages/CanvasPage/CanvasPage.jsx";
 import ProjectsPage from "./pages/ProjectsPage/ProjectsPage.jsx";
+import ClientsPage from "./pages/ClientsPage/ClientsPage.jsx";
 import LoginPage from "./pages/LoginPage/LoginPage.jsx";
 import { apiFetch } from "./lib/api.js";
 import BoxModal from "./components/modals/BoxModal/BoxModal.jsx";
@@ -17,6 +18,7 @@ import CableTypeModal from "./components/modals/CableTypeModal/CableTypeModal.js
 import useCatalog from "./hooks/useCatalog.js";
 import useProjects from "./hooks/useProjects.js";
 import useCanvas from "./hooks/useCanvas.js";
+import useClients from "./hooks/useClients.js";
 import "./App.css";
 
 const MODES = [
@@ -151,6 +153,7 @@ function App() {
     handleAddProduct,
     handleProductInputKeyDown,
     updateProduct,
+    deleteProduct,
     handleSort,
     handleAddCategory,
     updateCategory,
@@ -184,6 +187,15 @@ function App() {
     handleAddTemplateMargin,
     deleteTemplateMargin,
   } = useCatalog({ authToken: accessToken });
+
+  const {
+    clients,
+    clientForm,
+    setClientForm,
+    handleAddClient,
+    updateClient,
+    deleteClient,
+  } = useClients();
 
   const { projects, isLoading: isProjectsLoading } = useProjects({
     apiEnabled: import.meta.env.VITE_API_ENABLED === "true",
@@ -437,6 +449,11 @@ function App() {
         icon: Package,
         items: ["Productos", "Categorías", "Distribuidores", "Márgenes", "Plantillas", "Fabricantes"],
       },
+      {
+        title: "Clientes",
+        icon: Users,
+        items: [],
+      },
     ],
     []
   );
@@ -471,8 +488,9 @@ function App() {
   const isTemplatesSection = activeSection === "Catálogo" && activeSubsection === "Plantillas";
   const isManufacturersSection = activeSection === "Catálogo" && activeSubsection === "Fabricantes";
   const isProjectsSection = activeSection === "Proyectos";
+  const isClientsSection = activeSection === "Clientes";
   const hideToolbar =
-    (isDashboardSection || isProductsSection || isCategoriesSection || isProvidersSection || isMarginsSection || isTemplatesSection || isManufacturersSection || isProjectsSection) && !isProjectDesignMode;
+    (isDashboardSection || isProductsSection || isCategoriesSection || isProvidersSection || isMarginsSection || isTemplatesSection || isManufacturersSection || isProjectsSection || isClientsSection) && !isProjectDesignMode;
 
   const handleLogin = async ({ email, password }) => {
     setLoginError("");
@@ -1042,18 +1060,17 @@ function App() {
           onSort={handleSort}
           sortState={productSort}
           onUpdateProduct={updateProduct}
+          onDeleteProduct={deleteProduct}
           categoryForm={categoryForm}
           onCategoryFormChange={(updates) => setCategoryForm((prev) => ({ ...prev, ...updates }))}
           onAddCategory={handleAddCategory}
           onUpdateCategory={updateCategory}
           onDeleteCategory={deleteCategory}
-          providers={providers}
           providerForm={providerForm}
           onProviderFormChange={(updates) => setProviderForm((prev) => ({ ...prev, ...updates }))}
           onAddProvider={handleAddProvider}
           onUpdateProvider={updateProvider}
           onDeleteProvider={deleteProvider}
-          manufacturers={manufacturers}
           manufacturerForm={manufacturerForm}
           onManufacturerFormChange={(updates) =>
             setManufacturerForm((prev) => ({ ...prev, ...updates }))
@@ -1079,11 +1096,22 @@ function App() {
           onDeleteTemplateMargin={deleteTemplateMargin}
         />
 
+        <ClientsPage
+          isActive={isClientsSection && !isProjectDesignMode}
+          clients={clients}
+          clientForm={clientForm}
+          onClientFormChange={(updates) => setClientForm((prev) => ({ ...prev, ...updates }))}
+          onAddClient={handleAddClient}
+          onUpdateClient={updateClient}
+          onDeleteClient={deleteClient}
+        />
+
         <ProjectsPage
           isProjectsSection={isProjectsSection && !isProjectDesignMode}
           activeSubsection={activeSubsection}
           hideStatusControls={false}
           authToken={accessToken}
+          clients={clients}
           onOpenDesigner={(projectId, status) => {
             setActiveProjectId(projectId);
             setActiveProjectStatus(status || "draft");

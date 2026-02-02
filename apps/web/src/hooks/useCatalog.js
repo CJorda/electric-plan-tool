@@ -40,6 +40,15 @@ function useCatalog({ authToken = "" } = {}) {
     website: "",
     notes: "",
   });
+
+  const normalizeOptionalFields = (payload) => ({
+    ...payload,
+    contactName: payload.contactName?.trim() || null,
+    email: payload.email?.trim() || null,
+    phone: payload.phone?.trim() || null,
+    website: payload.website?.trim() || null,
+    notes: payload.notes?.trim() || null,
+  });
   const [margins, setMargins] = useState([]);
   const [marginForm, setMarginForm] = useState({ providerId: "", categoryId: "", marginPercent: 0 });
   const [templates, setTemplates] = useState([]);
@@ -91,10 +100,11 @@ function useCatalog({ authToken = "" } = {}) {
       return;
     }
     try {
+      const payload = normalizeOptionalFields(providerForm);
       const response = await authFetch("/api/catalog/providers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(providerForm),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -120,11 +130,12 @@ function useCatalog({ authToken = "" } = {}) {
       return;
     }
     try {
+      const payload = normalizeOptionalFields(nextProvider);
       const response = await authFetch(`/api/catalog/providers/${providerId}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(nextProvider),
+          body: JSON.stringify(payload),
         }
       );
       if (!response.ok) {
@@ -170,10 +181,11 @@ function useCatalog({ authToken = "" } = {}) {
       return;
     }
     try {
+      const payload = normalizeOptionalFields(manufacturerForm);
       const response = await authFetch("/api/catalog/manufacturers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(manufacturerForm),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -199,11 +211,12 @@ function useCatalog({ authToken = "" } = {}) {
       return;
     }
     try {
+      const payload = normalizeOptionalFields(nextManufacturer);
       const response = await authFetch(`/api/catalog/manufacturers/${manufacturerId}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(nextManufacturer),
+          body: JSON.stringify(payload),
         }
       );
       if (!response.ok) {
@@ -595,6 +608,20 @@ function useCatalog({ authToken = "" } = {}) {
     }
   };
 
+  const deleteProduct = async (productId) => {
+    if (!apiEnabled) {
+      setProducts((prev) => prev.filter((product) => product.id !== productId));
+      return;
+    }
+    try {
+      const response = await authFetch(`/api/catalog/products/${productId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Error eliminando producto");
+      setProducts((prev) => prev.filter((product) => product.id !== productId));
+    } catch {
+      // ignore
+    }
+  };
+
   const handleSort = (key) => {
     setProductSort((prev) => {
       const nextDirection = prev.key === key && prev.direction === "asc" ? "desc" : "asc";
@@ -770,6 +797,7 @@ function useCatalog({ authToken = "" } = {}) {
     handleAddProduct,
     handleProductInputKeyDown,
     updateProduct,
+    deleteProduct,
     handleSort,
     handleAddCategory,
     updateCategory,

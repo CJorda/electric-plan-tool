@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import CustomSelect from "../ui/CustomSelect.jsx";
 import "./ProductsSection.css";
 
@@ -17,13 +17,21 @@ function ProductsSection({
   onSort,
   sortState,
   onUpdateProduct,
+  onDeleteProduct,
 }) {
+  const [deleteCandidate, setDeleteCandidate] = useState(null);
   const getDiscountedPrice = (pvp, discountPercent) => {
     const base = Number(pvp) || 0;
     const percent = Number(discountPercent) || 0;
     if (base <= 0) return 0;
     const raw = base * (1 - percent / 100);
     return Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  };
+
+  const formatTwoDecimals = (value) => {
+    const numberValue = Number(value);
+    if (!Number.isFinite(numberValue)) return "";
+    return numberValue.toFixed(2);
   };
 
   const categoryFilterOptions = useMemo(
@@ -141,6 +149,7 @@ function ProductsSection({
           <input
             placeholder="Nº serie fabricante"
             name="productSerial"
+            className="products__input--serial"
             value={productForm.serial}
             onChange={(event) => onProductFormChange({ serial: event.target.value })}
             onKeyDown={onProductInputKeyDown}
@@ -153,6 +162,9 @@ function ProductsSection({
             name="productPvp"
             value={productForm.distributorPrice}
             onChange={(event) => onProductFormChange({ distributorPrice: event.target.value })}
+            onBlur={(event) =>
+              onProductFormChange({ distributorPrice: formatTwoDecimals(event.target.value) })
+            }
             onKeyDown={onProductInputKeyDown}
           />
           <input
@@ -163,6 +175,9 @@ function ProductsSection({
             name="productDiscount"
             value={productForm.discountPercent}
             onChange={(event) => onProductFormChange({ discountPercent: event.target.value })}
+            onBlur={(event) =>
+              onProductFormChange({ discountPercent: formatTwoDecimals(event.target.value) })
+            }
             onKeyDown={onProductInputKeyDown}
           />
           <input
@@ -180,16 +195,21 @@ function ProductsSection({
             name="productShipping"
             value={productForm.shippingCost}
             onChange={(event) => onProductFormChange({ shippingCost: event.target.value })}
+            onBlur={(event) =>
+              onProductFormChange({ shippingCost: formatTwoDecimals(event.target.value) })
+            }
             onKeyDown={onProductInputKeyDown}
           />
-          <input
-            placeholder="Tiempo entrega"
-            className="products__input--wide"
-            name="productLeadTime"
-            value={productForm.leadTime}
-            onChange={(event) => onProductFormChange({ leadTime: event.target.value })}
-            onKeyDown={onProductInputKeyDown}
-          />
+          <div className="products__leadtime-cell">
+            <input
+              placeholder="Tiempo entrega"
+              className="products__input--wide"
+              name="productLeadTime"
+              value={productForm.leadTime}
+              onChange={(event) => onProductFormChange({ leadTime: event.target.value })}
+              onKeyDown={onProductInputKeyDown}
+            />
+          </div>
         </div>
 
         {groupedProducts.length === 0 ? (
@@ -227,6 +247,7 @@ function ProductsSection({
                   />
                   <input
                     value={product.serial}
+                    className="products__input--serial"
                     onChange={(event) => onUpdateProduct(product.id, { serial: event.target.value })}
                   />
                   <input
@@ -237,6 +258,11 @@ function ProductsSection({
                     onChange={(event) =>
                       onUpdateProduct(product.id, { distributorPrice: Number(event.target.value) })
                     }
+                    onBlur={(event) =>
+                      onUpdateProduct(product.id, {
+                        distributorPrice: Number(formatTwoDecimals(event.target.value)),
+                      })
+                    }
                   />
                   <input
                     type="number"
@@ -245,6 +271,11 @@ function ProductsSection({
                     className="products__input--compact"
                     onChange={(event) =>
                       onUpdateProduct(product.id, { discountPercent: Number(event.target.value) })
+                    }
+                    onBlur={(event) =>
+                      onUpdateProduct(product.id, {
+                        discountPercent: Number(formatTwoDecimals(event.target.value)),
+                      })
                     }
                   />
                   <input
@@ -261,18 +292,61 @@ function ProductsSection({
                     onChange={(event) =>
                       onUpdateProduct(product.id, { shippingCost: Number(event.target.value) })
                     }
+                    onBlur={(event) =>
+                      onUpdateProduct(product.id, {
+                        shippingCost: Number(formatTwoDecimals(event.target.value)),
+                      })
+                    }
                   />
-                  <input
-                    value={product.leadTime}
-                    className="products__input--wide"
-                    onChange={(event) => onUpdateProduct(product.id, { leadTime: event.target.value })}
-                  />
+                  <div className="products__leadtime-cell">
+                    <input
+                      value={product.leadTime}
+                      className="products__input--wide"
+                      onChange={(event) => onUpdateProduct(product.id, { leadTime: event.target.value })}
+                    />
+                    <button
+                      className="products__delete"
+                      type="button"
+                      onClick={() => setDeleteCandidate(product)}
+                    >
+                      X
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           ))
         )}
       </div>
+      {deleteCandidate && (
+        <div className="products__modal-overlay" role="dialog" aria-modal="true">
+          <div className="products__modal">
+            <h3>¿Eliminar producto?</h3>
+            <p>
+              Se eliminará <strong>{deleteCandidate.name}</strong>.
+            </p>
+            <div className="products__modal-actions">
+              <button
+                className="products__modal-cancel"
+                type="button"
+                onClick={() => setDeleteCandidate(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="products__modal-confirm"
+                type="button"
+                onClick={() => {
+                  onDeleteProduct?.(deleteCandidate.id);
+                  setDeleteCandidate(null);
+                }}
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -20,6 +20,12 @@ function CustomSelect({
   }, [options, placeholder, value]);
 
   useEffect(() => {
+    if (open) {
+      setOpen(false);
+    }
+  }, [value]);
+
+  useEffect(() => {
     const handleOutside = (event) => {
       if (!rootRef.current) return;
       if (!rootRef.current.contains(event.target)) {
@@ -65,7 +71,11 @@ function CustomSelect({
         <ChevronDown size={16} />
       </button>
       {open && (
-        <div className="app-select__menu" role="listbox">
+        <div
+          className="app-select__menu"
+          role="listbox"
+          onClick={() => setOpen(false)}
+        >
           {options.map((option) => (
             <button
               key={option.value}

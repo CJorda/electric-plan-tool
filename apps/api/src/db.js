@@ -43,6 +43,20 @@ export const ensureProjectsTable = async () => {
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS design JSONB");
 };
 
+export const ensureProjectAttachmentsTable = async () => {
+  await query(
+    `CREATE TABLE IF NOT EXISTS project_attachments (
+      id UUID PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      mime_type TEXT,
+      size INTEGER NOT NULL DEFAULT 0,
+      data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+};
+
 export const ensureCatalogTables = async () => {
   await query(
     `CREATE TABLE IF NOT EXISTS categories (
@@ -92,6 +106,7 @@ export const ensureCatalogTables = async () => {
     `CREATE TABLE IF NOT EXISTS product_price_history (
       id UUID PRIMARY KEY,
       product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      distributor_id UUID,
       distributor_price NUMERIC(12,2) NOT NULL DEFAULT 0,
       discount_price NUMERIC(12,2) NOT NULL DEFAULT 0,
       shipping_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
@@ -100,6 +115,7 @@ export const ensureCatalogTables = async () => {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );`
   );
+  await query("ALTER TABLE product_price_history ADD COLUMN IF NOT EXISTS distributor_id UUID");
   await query(
     `CREATE TABLE IF NOT EXISTS manufacturers (
       id UUID PRIMARY KEY,
@@ -131,6 +147,20 @@ export const ensureCatalogTables = async () => {
   await query("ALTER TABLE providers ADD COLUMN IF NOT EXISTS phone TEXT");
   await query("ALTER TABLE providers ADD COLUMN IF NOT EXISTS website TEXT");
   await query("ALTER TABLE providers ADD COLUMN IF NOT EXISTS notes TEXT");
+  await query(
+    `CREATE TABLE IF NOT EXISTS product_distributor_prices (
+      id UUID PRIMARY KEY,
+      product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      distributor_id UUID NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+      distributor_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+      discount_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+      shipping_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+      lead_time TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(product_id, distributor_id)
+    );`
+  );
   await query(
     `DO $$
     BEGIN

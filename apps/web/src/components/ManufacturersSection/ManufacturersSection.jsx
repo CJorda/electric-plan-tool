@@ -1,3 +1,4 @@
+import { useState } from "react";
 import "./ManufacturersSection.css";
 
 export default function ManufacturersSection({
@@ -8,6 +9,18 @@ export default function ManufacturersSection({
   onUpdateManufacturer,
   onDeleteManufacturer,
 }) {
+  const [showValidation, setShowValidation] = useState(false);
+  const isNameValid = manufacturerForm.name.trim().length > 0;
+  const isContactValid = manufacturerForm.contactName.trim().length > 0;
+  const handleAdd = () => {
+    if (!isNameValid || !isContactValid) {
+      setShowValidation(true);
+      return;
+    }
+    setShowValidation(false);
+    onAddManufacturer();
+  };
+
   return (
     <section className="manufacturers">
       <div className="manufacturers__header">
@@ -15,7 +28,7 @@ export default function ManufacturersSection({
           <h2>Catálogo · Fabricantes</h2>
           <p>Define fabricantes y guarda sus datos de contacto.</p>
         </div>
-        <button type="button" onClick={onAddManufacturer}>
+        <button type="button" onClick={handleAdd}>
           Añadir fabricante
         </button>
       </div>
@@ -34,13 +47,21 @@ export default function ManufacturersSection({
         <div className="manufacturers__row manufacturers__row--new">
           <input
             placeholder="Nombre"
+            className={showValidation && !isNameValid ? "manufacturers__input--error" : ""}
             value={manufacturerForm.name}
-            onChange={(event) => onManufacturerFormChange({ name: event.target.value })}
+            onChange={(event) => {
+              setShowValidation(false);
+              onManufacturerFormChange({ name: event.target.value });
+            }}
           />
           <input
             placeholder="Contacto"
+            className={showValidation && !isContactValid ? "manufacturers__input--error" : ""}
             value={manufacturerForm.contactName}
-            onChange={(event) => onManufacturerFormChange({ contactName: event.target.value })}
+            onChange={(event) => {
+              setShowValidation(false);
+              onManufacturerFormChange({ contactName: event.target.value });
+            }}
           />
           <input
             placeholder="correo@empresa.com"

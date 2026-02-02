@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { query } from "../db.js";
+import { query, ensureProjectAttachmentsTable } from "../db.js";
 import { randomUUID } from "crypto";
 import { streamQuotePdf } from "../lib/quotePdf.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -20,6 +20,17 @@ const projectSchema = z.object({
   createdAt: z.string().optional().nullable(),
 });
 
+const attachmentSchema = z.object({
+  name: z.string().min(1),
+  type: z.string().optional().nullable(),
+  size: z.number().nonnegative().default(0),
+  dataUrl: z.string().min(10),
+});
+
+const attachmentPayloadSchema = z.object({
+  items: z.array(attachmentSchema).min(1),
+});
+
 const ensureProjectColumns = async () => {
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS client text");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS reference text");
@@ -31,6 +42,14 @@ const parseCreatedAt = (value) => {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+const decodeDataUrl = (dataUrl = "") => {
+  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+  if (!match) return null;
+  const mime = match[1] || "application/octet-stream";
+  const data = Buffer.from(match[2], "base64");
+  return { mime, data };
 };
 
 /**
@@ -53,6 +72,176 @@ projectsRouter.get("/", async (req, res) => {
     res.json({ items: result.rows });
   } catch (error) {
     res.status(500).json({ error: "Error listando proyectos" });
+  }
+});
+
+/**
+ * @openapi
+ * /api/projects/{projectId}/attachments:
+ *   get:
+ *     tags:
+ *       - Projects
+ *     summary: Lista adjuntos de un proyecto
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de adjuntos
+ */
+projectsRouter.get("/:projectId/attachments", async (req, res) => {
+  try {
+    await ensureProjectAttachmentsTable();
+    const result = await query(
+      `SELECT id, name, mime_type, size, created_at
+       FROM project_attachments
+       WHERE project_id = $1
+       ORDER BY created_at DESC`,
+      [req.params.projectId]
+    );
+    res.json({ items: result.rows });
+  } catch (error) {
+    res.status(500).json({ error: "Error listando adjuntos" });
+  }
+});
+
+/**
+ * @openapi
+ * /api/projects/{projectId}/attachments:
+ *   post:
+ *     tags:
+ *       - Projects
+ *     summary: Sube adjuntos a un proyecto
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               items:
+ *                 type: array
+ *     responses:
+ *       201:
+ *         description: Adjuntos creados
+ */
+projectsRouter.post("/:projectId/attachments", async (req, res) => {
+  const parsed = attachmentPayloadSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Datos inválidos", details: parsed.error.format() });
+  }
+
+  try {
+    await ensureProjectAttachmentsTable();
+    const { projectId } = req.params;
+    const existing = await query("SELECT 1 FROM projects WHERE id = $1", [projectId]);
+    if (!existing.rows.length) {
+      return res.status(404).json({ error: "Proyecto no encontrado" });
+    }
+
+    const createdItems = [];
+    const maxSize = 5 * 1024 * 1024;
+    for (const item of parsed.data.items) {
+      const decoded = decodeDataUrl(item.dataUrl);
+      if (!decoded) {
+        return res.status(400).json({ error: "Formato de adjunto inválido" });
+      }
+      if (decoded.data.length > maxSize) {
+        return res.status(400).json({ error: "El adjunto supera 5MB" });
+      }
+      const id = randomUUID();
+      const result = await query(
+        `INSERT INTO project_attachments (id, project_id, name, mime_type, size, data)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, name, mime_type, size, created_at`,
+        [id, projectId, item.name, item.type || decoded.mime, item.size || decoded.data.length, decoded.data]
+      );
+      createdItems.push(result.rows[0]);
+    }
+    res.status(201).json({ items: createdItems });
+  } catch (error) {
+    res.status(500).json({ error: "Error subiendo adjuntos" });
+  }
+});
+
+/**
+ * @openapi
+ * /api/projects/{projectId}/attachments/{attachmentId}:
+ *   get:
+ *     tags:
+ *       - Projects
+ *     summary: Descarga un adjunto
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *       - in: path
+ *         name: attachmentId
+ *         required: true
+ *     responses:
+ *       200:
+ *         description: Archivo adjunto
+ */
+projectsRouter.get("/:projectId/attachments/:attachmentId", async (req, res) => {
+  try {
+    await ensureProjectAttachmentsTable();
+    const { projectId, attachmentId } = req.params;
+    const result = await query(
+      `SELECT name, mime_type, data
+       FROM project_attachments
+       WHERE project_id = $1 AND id = $2`,
+      [projectId, attachmentId]
+    );
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "Adjunto no encontrado" });
+    }
+    const file = result.rows[0];
+    res.setHeader("Content-Type", file.mime_type || "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename=\"${file.name}\"`);
+    res.send(file.data);
+  } catch (error) {
+    res.status(500).json({ error: "Error descargando adjunto" });
+  }
+});
+
+/**
+ * @openapi
+ * /api/projects/{projectId}/attachments/{attachmentId}:
+ *   delete:
+ *     tags:
+ *       - Projects
+ *     summary: Elimina un adjunto
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *       - in: path
+ *         name: attachmentId
+ *         required: true
+ *     responses:
+ *       200:
+ *         description: Adjunto eliminado
+ */
+projectsRouter.delete("/:projectId/attachments/:attachmentId", async (req, res) => {
+  try {
+    await ensureProjectAttachmentsTable();
+    const { projectId, attachmentId } = req.params;
+    await query(
+      "DELETE FROM project_attachments WHERE project_id = $1 AND id = $2",
+      [projectId, attachmentId]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: "Error eliminando adjunto" });
   }
 });
 

@@ -1,15 +1,25 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import CustomSelect from "../ui/CustomSelect.jsx";
 import './ProjectForm.css';
 
-export default function ProjectForm({ apiEnabled = import.meta.env.VITE_API_ENABLED === 'true', onCreate }) {
+export default function ProjectForm({
+  apiEnabled = import.meta.env.VITE_API_ENABLED === 'true',
+  onCreate,
+  clients = [],
+}) {
   const [name, setName] = useState('');
-  const [type, setType] = useState('plan');
   const [client, setClient] = useState('');
   const [reference, setReference] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const clientOptions = useMemo(() => {
+    if (!clients.length) {
+      return [{ value: "", label: "No hay clientes", disabled: true }];
+    }
+    return clients.map((item) => ({ value: item.name, label: item.name }));
+  }, [clients]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -19,7 +29,7 @@ export default function ProjectForm({ apiEnabled = import.meta.env.VITE_API_ENAB
       const payload = {
         name: name.trim(),
         status: 'draft',
-        type,
+        type: 'plan',
         client: client.trim() || null,
         reference: reference.trim() || null,
         address: address.trim() || null,
@@ -27,7 +37,6 @@ export default function ProjectForm({ apiEnabled = import.meta.env.VITE_API_ENAB
       };
       const created = await onCreate(payload);
       setName('');
-      setType('plan');
       setClient('');
       setReference('');
       setAddress('');
@@ -48,21 +57,14 @@ export default function ProjectForm({ apiEnabled = import.meta.env.VITE_API_ENAB
       </label>
 
       <label>
-        Tipo
-        <CustomSelect
-          value={type}
-          options={[
-            { value: "plan", label: "Plan" },
-            { value: "installation", label: "Instalación" },
-            { value: "maintenance", label: "Mantenimiento" },
-          ]}
-          onChange={setType}
-        />
-      </label>
-
-      <label>
         Cliente
-        <input value={client} onChange={(e) => setClient(e.target.value)} placeholder="Nombre del cliente" />
+        <CustomSelect
+          value={client}
+          options={clientOptions}
+          placeholder="Selecciona un cliente"
+          onChange={setClient}
+          disabled={!clients.length}
+        />
       </label>
 
       <label>

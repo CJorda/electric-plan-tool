@@ -1,0 +1,5 @@
+.clients-page{margin:20px 24px;display:flex;flex-direction:column;gap:16px}
+.clients-page__content{min-width:0;display:flex;flex-direction:column;gap:16px}
+.clients-page__content .clients{margin:0;background:transparent;border:none;padding:0}
+@media (max-width:900px){.clients-page{margin:16px}}
+@media (max-width:640px){.clients-page{margin:12px}}

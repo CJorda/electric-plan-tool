@@ -1,3 +1,4 @@
+import { useState } from "react";
 import "./ProvidersSection.css";
 
 export default function ProvidersSection({
@@ -8,6 +9,18 @@ export default function ProvidersSection({
   onUpdateProvider,
   onDeleteProvider,
 }) {
+  const [showValidation, setShowValidation] = useState(false);
+  const isNameValid = providerForm.name.trim().length > 0;
+  const isContactValid = providerForm.contactName.trim().length > 0;
+  const handleAdd = () => {
+    if (!isNameValid || !isContactValid) {
+      setShowValidation(true);
+      return;
+    }
+    setShowValidation(false);
+    onAddProvider();
+  };
+
   return (
     <section className="providers">
       <div className="providers__header">
@@ -15,7 +28,7 @@ export default function ProvidersSection({
           <h2>Catálogo · Distribuidores</h2>
           <p>Define distribuidores y guarda sus datos de contacto.</p>
         </div>
-        <button type="button" onClick={onAddProvider}>Añadir distribuidor</button>
+        <button type="button" onClick={handleAdd}>Añadir distribuidor</button>
       </div>
 
       <div className="providers__table">
@@ -24,7 +37,6 @@ export default function ProvidersSection({
           <span>Contacto</span>
           <span>Email</span>
           <span>Teléfono</span>
-          <span>Web</span>
           <span>Notas</span>
           <span />
         </div>
@@ -32,13 +44,21 @@ export default function ProvidersSection({
         <div className="providers__row providers__row--new">
           <input
             placeholder="Nombre del distribuidor"
+            className={showValidation && !isNameValid ? "providers__input--error" : ""}
             value={providerForm.name}
-            onChange={(event) => onProviderFormChange({ name: event.target.value })}
+            onChange={(event) => {
+              setShowValidation(false);
+              onProviderFormChange({ name: event.target.value });
+            }}
           />
           <input
             placeholder="Contacto"
+            className={showValidation && !isContactValid ? "providers__input--error" : ""}
             value={providerForm.contactName}
-            onChange={(event) => onProviderFormChange({ contactName: event.target.value })}
+            onChange={(event) => {
+              setShowValidation(false);
+              onProviderFormChange({ contactName: event.target.value });
+            }}
           />
           <input
             placeholder="correo@empresa.com"
@@ -97,7 +117,7 @@ export default function ProvidersSection({
                 className="providers__delete"
                 onClick={() => onDeleteProvider(provider.id)}
               >
-                Eliminar
+                X
               </button>
             </div>
           ))

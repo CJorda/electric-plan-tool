@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import './ProjectsPage.css';
 import ProjectList from '../../components/ProjectList/ProjectList.jsx';
 import useProjects from '../../hooks/useProjects.js';
 import ProjectDeleteModal from '../../components/ProjectDeleteModal/ProjectDeleteModal.jsx';
 import ProjectCreateModal from '../../components/ProjectCreateModal/ProjectCreateModal.jsx';
+import ProjectAttachmentsModal from '../../components/ProjectAttachmentsModal/ProjectAttachmentsModal.jsx';
 import { apiFetch } from '../../lib/api.js';
 
-function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onProjectCreated, hideStatusControls = false, authToken = '' }) {
+function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onProjectCreated, hideStatusControls = false, authToken = '', clients = [] }) {
   const apiEnabled = import.meta.env.VITE_API_ENABLED === 'true';
   const [projectTotals, setProjectTotals] = useState(() => {
     try {
@@ -23,10 +24,138 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
 
   const [confirmProject, setConfirmProject] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [attachmentsProject, setAttachmentsProject] = useState(null);
+  const [attachmentsByProject, setAttachmentsByProject] = useState({});
+
+  const formatBytes = (value) => {
+    const bytes = Number(value) || 0;
+    if (bytes < 1024) return `${bytes} B`;
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    const mb = kb / 1024;
+    return `${mb.toFixed(1)} MB`;
+  };
+
+  const readFileAsDataUrl = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
   const handleDelete = (project) => {
     // open confirmation modal
     setConfirmProject(project);
+  };
+
+  const handleOpenAttachments = async (project) => {
+    if (!project) return;
+    setAttachmentsProject(project);
+    if (!apiEnabled) return;
+    try {
+      const res = await apiFetch(`/api/projects/${project.id}/attachments`, {}, authToken);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const items = (data.items || []).map((item) => ({
+        ...item,
+        sizeLabel: formatBytes(item.size),
+      }));
+      setAttachmentsByProject((prev) => ({ ...prev, [project.id]: items }));
+    } catch (error) {
+      console.error('Failed to load attachments', error);
+      alert('No se pudieron cargar los adjuntos.');
+    }
+  };
+
+  const handleAddAttachments = async (files) => {
+    if (!attachmentsProject) return;
+    const maxSize = 5 * 1024 * 1024;
+    const allowed = files.filter((file) => file.size <= maxSize);
+    if (allowed.length !== files.length) {
+      alert('Algunos archivos superan 5MB y fueron omitidos.');
+    }
+    if (!apiEnabled) return;
+
+    try {
+      const payloadItems = await Promise.all(
+        allowed.map(async (file) => ({
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          dataUrl: await readFileAsDataUrl(file),
+        }))
+      );
+      const res = await apiFetch(
+        `/api/projects/${attachmentsProject.id}/attachments`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: payloadItems }),
+        },
+        authToken
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const created = (data.items || []).map((item) => ({
+        ...item,
+        sizeLabel: formatBytes(item.size),
+      }));
+      setAttachmentsByProject((prev) => {
+        const current = prev[attachmentsProject.id] || [];
+        return {
+          ...prev,
+          [attachmentsProject.id]: [...created, ...current],
+        };
+      });
+    } catch (error) {
+      console.error('Failed to upload attachments', error);
+      alert('No se pudieron subir los adjuntos.');
+    }
+  };
+
+  const handleDeleteAttachment = (attachmentId) => {
+    if (!attachmentsProject) return;
+    if (!apiEnabled) return;
+    apiFetch(
+      `/api/projects/${attachmentsProject.id}/attachments/${attachmentId}`,
+      { method: 'DELETE' },
+      authToken
+    )
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setAttachmentsByProject((prev) => {
+          const current = prev[attachmentsProject.id] || [];
+          return {
+            ...prev,
+            [attachmentsProject.id]: current.filter((item) => item.id !== attachmentId),
+          };
+        });
+      })
+      .catch((error) => {
+        console.error('Failed to delete attachment', error);
+        alert('No se pudo eliminar el adjunto.');
+      });
+  };
+
+  const handleOpenAttachment = async (attachment) => {
+    if (!attachmentsProject || !attachment) return;
+    if (!apiEnabled) return;
+    try {
+      const res = await apiFetch(
+        `/api/projects/${attachmentsProject.id}/attachments/${attachment.id}`,
+        {},
+        authToken
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      console.error('Failed to open attachment', error);
+      alert('No se pudo abrir el adjunto.');
+    }
   };
 
   const performDelete = (project) => {
@@ -161,6 +290,8 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
             totals={projectTotals}
             onOpen={handleOpen}
             onDelete={handleDelete}
+            onAttachments={handleOpenAttachments}
+            attachmentsByProject={attachmentsByProject}
             onStatusChange={handleStatusChange}
             hideStatusControls={hideStatusControls}
           />
@@ -177,6 +308,16 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onCreate={handleCreateProject}
+        clients={clients}
+      />
+      <ProjectAttachmentsModal
+        open={Boolean(attachmentsProject)}
+        project={attachmentsProject}
+        attachments={attachmentsProject ? attachmentsByProject[attachmentsProject.id] || [] : []}
+        onAddAttachments={handleAddAttachments}
+        onDeleteAttachment={handleDeleteAttachment}
+        onOpenAttachment={handleOpenAttachment}
+        onClose={() => setAttachmentsProject(null)}
       />
     </section>
   );

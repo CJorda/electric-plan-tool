@@ -1,7 +1,7 @@
 import './ProjectCreateModal.css';
 import ProjectForm from '../ProjectForm/ProjectForm.jsx';
 
-export default function ProjectCreateModal({ open, onClose, onCreate }) {
+export default function ProjectCreateModal({ open, onClose, onCreate, clients = [] }) {
   if (!open) return null;
 
   const handleCreate = async (payload) => {
@@ -18,7 +18,7 @@ export default function ProjectCreateModal({ open, onClose, onCreate }) {
           <button className="pc-modal__close" type="button" onClick={onClose}>Cerrar</button>
         </div>
         <div className="pc-modal__body">
-          <ProjectForm onCreate={handleCreate} />
+          <ProjectForm onCreate={handleCreate} clients={clients} />
         </div>
       </div>
     </div>

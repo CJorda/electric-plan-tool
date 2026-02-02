@@ -1,4 +1,4 @@
-.project-form{display:flex;flex-direction:column;gap:12px;max-width:420px;width:100%}
+.project-form{display:flex;flex-direction:column;gap:12px;max-width:100%;width:100%}
 .project-form label{display:flex;flex-direction:column;font-size:13px;color:var(--text);gap:6px}
 .project-form input,.project-form .app-select__trigger,.project-form textarea{
 	padding:10px 12px;
@@ -8,12 +8,30 @@
 	color:var(--text);
 	font-size:13px;
 }
+.project-form .app-select__menu{
+	background:#ffffff;
+	border:1px solid #e2e8f0;
+	color:#0f172a;
+	box-shadow:0 16px 32px rgba(15, 23, 42, 0.12);
+	z-index:2100;
+}
+.project-form .app-select__option{
+	color:#0f172a;
+	background:#ffffff;
+}
+.project-form .app-select__option:hover{
+	background:#f8fafc;
+}
+.project-form .app-select__option--active{
+	background:#e2e8f0;
+	font-weight:600;
+}
 .project-form textarea{resize:vertical;min-height:70px}
 .project-form input::placeholder,.project-form textarea::placeholder{color:var(--muted)}
 .project-form__actions{display:flex;justify-content:flex-end}
 .project-form button{
 	background:var(--accent-strong);
-	color:#0b0f1a;
+	color:#ffffff;
 	padding:10px 14px;
 	border-radius:10px;
 	border:0;

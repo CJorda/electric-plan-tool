@@ -83,6 +83,7 @@ const mapProductRow = (row) => ({
 
 const mapPriceHistoryRow = (row) => ({
   id: row.id,
+  distributorId: row.distributor_id ?? null,
   distributorPrice: Number(row.distributor_price) || 0,
   discountPrice: Number(row.discount_price) || 0,
   shippingCost: Number(row.shipping_cost) || 0,
@@ -297,11 +298,21 @@ catalogRouter.delete("/categories/:categoryId", async (req, res) => {
 catalogRouter.get("/products", async (req, res) => {
   try {
     const result = await query(
-            `SELECT p.id, p.name, p.manufacturer, p.distributor_id, p.serial, p.distributor_price, p.discount_price,
-              p.shipping_cost, p.lead_time, c.name AS category, pr.name AS distributor_name
+      `SELECT p.id,
+              p.name,
+              p.manufacturer,
+              p.serial,
+              c.name AS category,
+              pdp.distributor_id,
+              pr.name AS distributor_name,
+              COALESCE(pdp.distributor_price, p.distributor_price) AS distributor_price,
+              COALESCE(pdp.discount_price, p.discount_price) AS discount_price,
+              COALESCE(pdp.shipping_cost, p.shipping_cost) AS shipping_cost,
+              COALESCE(pdp.lead_time, p.lead_time) AS lead_time
        FROM products p
        JOIN categories c ON c.id = p.category_id
-       LEFT JOIN providers pr ON pr.id = p.distributor_id
+       LEFT JOIN product_distributor_prices pdp ON pdp.product_id = p.id
+       LEFT JOIN providers pr ON pr.id = pdp.distributor_id
        ORDER BY p.created_at DESC`
     );
     res.json({ items: result.rows.map(mapProductRow) });
@@ -357,47 +368,104 @@ catalogRouter.post("/products", async (req, res) => {
     if (categoryResult.rows.length === 0) {
       return res.status(400).json({ error: "Categoría no encontrada" });
     }
+    const existingProduct = await query(
+      `SELECT id
+       FROM products
+       WHERE category_id = $1
+         AND name = $2
+         AND manufacturer IS NOT DISTINCT FROM $3
+         AND serial IS NOT DISTINCT FROM $4
+       LIMIT 1`,
+      [categoryResult.rows[0].id, name, manufacturer ?? null, serial ?? null]
+    );
+
+    const productId = existingProduct.rows[0]?.id || randomUUID();
+    if (existingProduct.rows.length === 0) {
+      await query(
+        `INSERT INTO products
+          (id, category_id, name, manufacturer, distributor_id, serial, distributor_price, discount_price, shipping_cost, lead_time)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          productId,
+          categoryResult.rows[0].id,
+          name,
+          manufacturer ?? null,
+          distributorId ?? null,
+          serial ?? null,
+          distributorPrice ?? 0,
+          discountPrice ?? 0,
+          shippingCost ?? 0,
+          leadTime ?? null,
+        ]
+      );
+    }
+
     let distributorName = "";
-    let distributorIdValue = distributorId ?? null;
-    if (distributorIdValue) {
-      const distributorRes = await query("SELECT id, name FROM providers WHERE id = $1", [distributorIdValue]);
+    if (distributorId) {
+      const distributorRes = await query("SELECT id, name FROM providers WHERE id = $1", [distributorId]);
       if (distributorRes.rows.length === 0) {
         return res.status(400).json({ error: "Distribuidor no encontrado" });
       }
       distributorName = distributorRes.rows[0].name;
+      await query(
+        `INSERT INTO product_distributor_prices
+          (id, product_id, distributor_id, distributor_price, discount_price, shipping_cost, lead_time)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (product_id, distributor_id)
+         DO UPDATE SET
+           distributor_price = EXCLUDED.distributor_price,
+           discount_price = EXCLUDED.discount_price,
+           shipping_cost = EXCLUDED.shipping_cost,
+           lead_time = EXCLUDED.lead_time,
+           updated_at = NOW()`,
+        [
+          randomUUID(),
+          productId,
+          distributorId,
+          distributorPrice ?? 0,
+          discountPrice ?? 0,
+          shippingCost ?? 0,
+          leadTime ?? null,
+        ]
+      );
     }
-    const id = randomUUID();
-    const result = await query(
-      `INSERT INTO products
-        (id, category_id, name, manufacturer, distributor_id, serial, distributor_price, discount_price, shipping_cost, lead_time)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING id, name, manufacturer, distributor_id, serial, distributor_price, discount_price, shipping_cost, lead_time`,
+
+    await query(
+      `INSERT INTO product_price_history
+        (id, product_id, distributor_id, distributor_price, discount_price, shipping_cost, note)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
-        id,
-        categoryResult.rows[0].id,
-        name,
-        manufacturer ?? null,
-        distributorIdValue,
-        serial ?? null,
+        randomUUID(),
+        productId,
+        distributorId ?? null,
         distributorPrice ?? 0,
         discountPrice ?? 0,
         shippingCost ?? 0,
-        leadTime ?? null,
+        "Creación",
       ]
     );
-    await query(
-      `INSERT INTO product_price_history
-        (id, product_id, distributor_price, discount_price, shipping_cost, note)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [randomUUID(), id, distributorPrice ?? 0, discountPrice ?? 0, shippingCost ?? 0, "Creación"]
+
+    const rowResult = await query(
+      `SELECT p.id,
+              p.name,
+              p.manufacturer,
+              p.serial,
+              c.name AS category,
+              pdp.distributor_id,
+              pr.name AS distributor_name,
+              COALESCE(pdp.distributor_price, p.distributor_price) AS distributor_price,
+              COALESCE(pdp.discount_price, p.discount_price) AS discount_price,
+              COALESCE(pdp.shipping_cost, p.shipping_cost) AS shipping_cost,
+              COALESCE(pdp.lead_time, p.lead_time) AS lead_time
+       FROM products p
+       JOIN categories c ON c.id = p.category_id
+       LEFT JOIN product_distributor_prices pdp ON pdp.product_id = p.id AND pdp.distributor_id IS NOT DISTINCT FROM $2
+       LEFT JOIN providers pr ON pr.id = pdp.distributor_id
+       WHERE p.id = $1
+       LIMIT 1`,
+      [productId, distributorId ?? null]
     );
-    res.status(201).json(
-      mapProductRow({
-        ...result.rows[0],
-        category,
-        distributor_name: distributorName,
-      })
-    );
+    res.status(201).json(mapProductRow(rowResult.rows[0]));
   } catch (error) {
     res.status(500).json({ error: "Error creando producto" });
   }
@@ -455,20 +523,33 @@ catalogRouter.put("/products/:productId", async (req, res) => {
       return res.status(400).json({ error: "Categoría no encontrada" });
     }
     let distributorName = "";
-    let distributorIdValue = distributorId ?? null;
-    if (distributorIdValue) {
-      const distributorRes = await query("SELECT id, name FROM providers WHERE id = $1", [distributorIdValue]);
+    if (distributorId) {
+      const distributorRes = await query("SELECT id, name FROM providers WHERE id = $1", [distributorId]);
       if (distributorRes.rows.length === 0) {
         return res.status(400).json({ error: "Distribuidor no encontrado" });
       }
       distributorName = distributorRes.rows[0].name;
     }
-    const currentResult = await query(
-      "SELECT distributor_price, discount_price, shipping_cost FROM products WHERE id = $1",
-      [req.params.productId]
-    );
-    if (currentResult.rows.length === 0) {
+
+    const productExists = await query("SELECT id FROM products WHERE id = $1", [req.params.productId]);
+    if (productExists.rows.length === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    let currentResult = distributorId
+      ? await query(
+          "SELECT distributor_price, discount_price, shipping_cost FROM product_distributor_prices WHERE product_id = $1 AND distributor_id = $2",
+          [req.params.productId, distributorId]
+        )
+      : await query(
+          "SELECT distributor_price, discount_price, shipping_cost FROM products WHERE id = $1",
+          [req.params.productId]
+        );
+    if (currentResult.rows.length === 0) {
+      currentResult = await query(
+        "SELECT distributor_price, discount_price, shipping_cost FROM products WHERE id = $1",
+        [req.params.productId]
+      );
     }
     const result = await query(
       `UPDATE products
@@ -488,7 +569,7 @@ catalogRouter.put("/products/:productId", async (req, res) => {
         categoryResult.rows[0].id,
         name,
         manufacturer ?? null,
-        distributorIdValue,
+        distributorId ?? null,
         serial ?? null,
         distributorPrice ?? 0,
         discountPrice ?? 0,
@@ -497,19 +578,44 @@ catalogRouter.put("/products/:productId", async (req, res) => {
         req.params.productId,
       ]
     );
-    const current = currentResult.rows[0];
-    const priceChanged =
-      Number(current.distributor_price) !== Number(distributorPrice ?? 0) ||
-      Number(current.discount_price) !== Number(discountPrice ?? 0) ||
-      Number(current.shipping_cost) !== Number(shippingCost ?? 0);
-    if (priceChanged) {
+
+    if (distributorId) {
       await query(
-        `INSERT INTO product_price_history
-          (id, product_id, distributor_price, discount_price, shipping_cost, note)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO product_distributor_prices
+          (id, product_id, distributor_id, distributor_price, discount_price, shipping_cost, lead_time)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (product_id, distributor_id)
+         DO UPDATE SET
+           distributor_price = EXCLUDED.distributor_price,
+           discount_price = EXCLUDED.discount_price,
+           shipping_cost = EXCLUDED.shipping_cost,
+           lead_time = EXCLUDED.lead_time,
+           updated_at = NOW()`,
         [
           randomUUID(),
           req.params.productId,
+          distributorId,
+          distributorPrice ?? 0,
+          discountPrice ?? 0,
+          shippingCost ?? 0,
+          leadTime ?? null,
+        ]
+      );
+    }
+    const current = currentResult.rows[0];
+    const priceChanged =
+      Number(current?.distributor_price ?? 0) !== Number(distributorPrice ?? 0) ||
+      Number(current?.discount_price ?? 0) !== Number(discountPrice ?? 0) ||
+      Number(current?.shipping_cost ?? 0) !== Number(shippingCost ?? 0);
+    if (priceChanged) {
+      await query(
+        `INSERT INTO product_price_history
+          (id, product_id, distributor_id, distributor_price, discount_price, shipping_cost, note)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          randomUUID(),
+          req.params.productId,
+          distributorId ?? null,
           distributorPrice ?? 0,
           discountPrice ?? 0,
           shippingCost ?? 0,
@@ -517,15 +623,42 @@ catalogRouter.put("/products/:productId", async (req, res) => {
         ]
       );
     }
-    res.json(
-      mapProductRow({
-        ...result.rows[0],
-        category,
-        distributor_name: distributorName,
-      })
+    const rowResult = await query(
+      `SELECT p.id,
+              p.name,
+              p.manufacturer,
+              p.serial,
+              c.name AS category,
+              pdp.distributor_id,
+              pr.name AS distributor_name,
+              COALESCE(pdp.distributor_price, p.distributor_price) AS distributor_price,
+              COALESCE(pdp.discount_price, p.discount_price) AS discount_price,
+              COALESCE(pdp.shipping_cost, p.shipping_cost) AS shipping_cost,
+              COALESCE(pdp.lead_time, p.lead_time) AS lead_time
+       FROM products p
+       JOIN categories c ON c.id = p.category_id
+       LEFT JOIN product_distributor_prices pdp ON pdp.product_id = p.id AND pdp.distributor_id IS NOT DISTINCT FROM $2
+       LEFT JOIN providers pr ON pr.id = pdp.distributor_id
+       WHERE p.id = $1
+       LIMIT 1`,
+      [req.params.productId, distributorId ?? null]
     );
+    res.json(mapProductRow(rowResult.rows[0]));
   } catch (error) {
     res.status(500).json({ error: "Error actualizando producto" });
+  }
+});
+
+catalogRouter.delete("/products/:productId", async (req, res) => {
+  try {
+    await ensureCatalogTables();
+    const result = await query("DELETE FROM products WHERE id = $1", [req.params.productId]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: "Error eliminando producto" });
   }
 });
 
@@ -550,7 +683,7 @@ catalogRouter.put("/products/:productId", async (req, res) => {
 catalogRouter.get("/products/:productId/prices", async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, distributor_price, discount_price, shipping_cost, currency, note, created_at
+      `SELECT id, distributor_id, distributor_price, discount_price, shipping_cost, currency, note, created_at
        FROM product_price_history
        WHERE product_id = $1
        ORDER BY created_at DESC`,

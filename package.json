@@ -7,8 +7,12 @@
     "dev": "pnpm -C apps/web dev",
     "dev:web": "pnpm -C apps/web dev",
     "dev:api": "pnpm -C apps/api dev",
+    "dev:all": "concurrently \"pnpm -C apps/api dev\" \"pnpm -C apps/web dev\"",
     "build:web": "pnpm -C apps/web build",
     "preview:web": "pnpm -C apps/web preview"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
   },
   "keywords": [],
   "author": "",
