@@ -1,7 +1,27 @@
+import { useMemo, useState } from 'react';
 import './QuoteRevisionModal.css';
 
-export default function QuoteRevisionModal({ open, onClose, versions = [], onCreate, onRestore, loading }) {
+export default function QuoteRevisionModal({
+  open,
+  onClose,
+  versions = [],
+  onCreate,
+  onRestore,
+  onSetActive,
+  onClearActive,
+  activeVersionId,
+  loading,
+}) {
   if (!open) return null;
+
+  const [name, setName] = useState('');
+  const [notes, setNotes] = useState('');
+  const [status, setStatus] = useState('draft');
+  const [locked, setLocked] = useState(false);
+  const sortedVersions = useMemo(
+    () => [...versions].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+    [versions]
+  );
 
   return (
     <div className="qr-modal-backdrop" onClick={onClose}>
@@ -11,23 +31,81 @@ export default function QuoteRevisionModal({ open, onClose, versions = [], onCre
           <button className="qr-modal__close" type="button" onClick={onClose}>Cerrar</button>
         </div>
         <div className="qr-modal__body">
-          <button className="qr-modal__confirm" type="button" onClick={onCreate} disabled={loading}>
-            {loading ? 'Guardando...' : 'Guardar revisión'}
-          </button>
+          <div className="qr-modal__form">
+            <label>
+              Nombre
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej: Modbus"
+              />
+            </label>
+            <label>
+              Notas
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Detalles de la versión"
+                rows={2}
+              />
+            </label>
+            <label>
+              Estado
+              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="draft">Borrador</option>
+                <option value="confirmed">Confirmada</option>
+              </select>
+            </label>
+            <label className="qr-modal__checkbox">
+              <input type="checkbox" checked={locked} onChange={(e) => setLocked(e.target.checked)} />
+              Bloquear versión
+            </label>
+          </div>
+          <div className="qr-modal__actions">
+            <button
+              className="qr-modal__confirm"
+              type="button"
+              onClick={() => onCreate?.({ name, notes, status, locked })}
+              disabled={loading}
+            >
+              {loading ? 'Guardando...' : 'Crear versión'}
+            </button>
+            {activeVersionId && (
+              <button className="qr-modal__secondary" type="button" onClick={onClearActive}>
+                Salir de versión
+              </button>
+            )}
+          </div>
+
           <div className="qr-modal__list">
             {versions.length === 0 ? (
               <div className="qr-modal__empty">Aún no hay revisiones guardadas.</div>
             ) : (
-              versions.map((v) => (
+              sortedVersions.map((v) => (
                 <div key={v.id} className="qr-modal__row">
                   <div>
-                    <strong>Revisión</strong>
-                    <div className="qr-modal__date">{new Date(v.createdAt).toLocaleString()}</div>
+                    <strong>{v.name || 'Versión'}</strong>
+                    <div className="qr-modal__date">
+                      {new Date(v.createdAt).toLocaleString()}
+                      {v.author ? ` · ${v.author}` : ''}
+                      {v.status ? ` · ${v.status}` : ''}
+                      {v.locked ? ' · bloqueada' : ''}
+                    </div>
+                    {v.notes && <div className="qr-modal__notes">{v.notes}</div>}
                   </div>
                   <span className="qr-modal__id">{v.id.slice(0, 8)}</span>
-                  <button className="qr-modal__restore" type="button" onClick={() => onRestore?.(v)}>
-                    Restaurar
-                  </button>
+                  {activeVersionId === v.id ? (
+                    <span className="qr-modal__active">Activa</span>
+                  ) : (
+                    <div className="qr-modal__row-actions">
+                      <button className="qr-modal__restore" type="button" onClick={() => onRestore?.(v)}>
+                        Restaurar
+                      </button>
+                      <button className="qr-modal__primary" type="button" onClick={() => onSetActive?.(v)}>
+                        Trabajar
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}

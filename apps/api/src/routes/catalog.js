@@ -26,6 +26,13 @@ const productSchema = z.object({
   leadTime: z.string().optional().nullable(),
 });
 
+const productImageSchema = z.object({
+  dataUrl: z.string().min(10),
+  type: z.string().optional().nullable(),
+  name: z.string().optional().nullable(),
+  size: z.number().optional(),
+});
+
 const providerSchema = z.object({
   name: z.string().min(1),
   contactName: z.string().optional().nullable(),
@@ -79,7 +86,16 @@ const mapProductRow = (row) => ({
   discountPrice: Number(row.discount_price) || 0,
   shippingCost: Number(row.shipping_cost) || 0,
   leadTime: row.lead_time ?? "",
+  hasImage: Boolean(row.has_image),
 });
+
+const decodeDataUrl = (dataUrl = "") => {
+  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+  if (!match) return null;
+  const mime = match[1] || "application/octet-stream";
+  const data = Buffer.from(match[2], "base64");
+  return { mime, data };
+};
 
 const mapPriceHistoryRow = (row) => ({
   id: row.id,
@@ -308,7 +324,8 @@ catalogRouter.get("/products", async (req, res) => {
               COALESCE(pdp.distributor_price, p.distributor_price) AS distributor_price,
               COALESCE(pdp.discount_price, p.discount_price) AS discount_price,
               COALESCE(pdp.shipping_cost, p.shipping_cost) AS shipping_cost,
-              COALESCE(pdp.lead_time, p.lead_time) AS lead_time
+              COALESCE(pdp.lead_time, p.lead_time) AS lead_time,
+              (p.image_data IS NOT NULL) AS has_image
        FROM products p
        JOIN categories c ON c.id = p.category_id
        LEFT JOIN product_distributor_prices pdp ON pdp.product_id = p.id
@@ -456,7 +473,8 @@ catalogRouter.post("/products", async (req, res) => {
               COALESCE(pdp.distributor_price, p.distributor_price) AS distributor_price,
               COALESCE(pdp.discount_price, p.discount_price) AS discount_price,
               COALESCE(pdp.shipping_cost, p.shipping_cost) AS shipping_cost,
-              COALESCE(pdp.lead_time, p.lead_time) AS lead_time
+              COALESCE(pdp.lead_time, p.lead_time) AS lead_time,
+              (p.image_data IS NOT NULL) AS has_image
        FROM products p
        JOIN categories c ON c.id = p.category_id
        LEFT JOIN product_distributor_prices pdp ON pdp.product_id = p.id AND pdp.distributor_id IS NOT DISTINCT FROM $2
@@ -564,7 +582,7 @@ catalogRouter.put("/products/:productId", async (req, res) => {
            lead_time = $9,
            updated_at = NOW()
        WHERE id = $10
-       RETURNING id, name, manufacturer, distributor_id, serial, distributor_price, discount_price, shipping_cost, lead_time`,
+       RETURNING id, name, manufacturer, distributor_id, serial, distributor_price, discount_price, shipping_cost, lead_time, (image_data IS NOT NULL) AS has_image`,
       [
         categoryResult.rows[0].id,
         name,
@@ -634,7 +652,8 @@ catalogRouter.put("/products/:productId", async (req, res) => {
               COALESCE(pdp.distributor_price, p.distributor_price) AS distributor_price,
               COALESCE(pdp.discount_price, p.discount_price) AS discount_price,
               COALESCE(pdp.shipping_cost, p.shipping_cost) AS shipping_cost,
-              COALESCE(pdp.lead_time, p.lead_time) AS lead_time
+              COALESCE(pdp.lead_time, p.lead_time) AS lead_time,
+              (p.image_data IS NOT NULL) AS has_image
        FROM products p
        JOIN categories c ON c.id = p.category_id
        LEFT JOIN product_distributor_prices pdp ON pdp.product_id = p.id AND pdp.distributor_id IS NOT DISTINCT FROM $2
@@ -646,6 +665,58 @@ catalogRouter.put("/products/:productId", async (req, res) => {
     res.json(mapProductRow(rowResult.rows[0]));
   } catch (error) {
     res.status(500).json({ error: "Error actualizando producto" });
+  }
+});
+
+catalogRouter.post("/products/:productId/image", async (req, res) => {
+  const parsed = productImageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Datos inválidos", details: parsed.error.format() });
+  }
+  const decoded = decodeDataUrl(parsed.data.dataUrl);
+  if (!decoded) return res.status(400).json({ error: "Formato de imagen inválido" });
+  const maxSize = 5 * 1024 * 1024;
+  if (decoded.data.length > maxSize) {
+    return res.status(400).json({ error: "La imagen supera 5MB" });
+  }
+  try {
+    await ensureCatalogTables();
+    const result = await query(
+      `UPDATE products
+       SET image_data = $1,
+           image_mime = $2,
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, (image_data IS NOT NULL) AS has_image`,
+      [decoded.data, parsed.data.type || decoded.mime, req.params.productId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+    res.json({ ok: true, hasImage: Boolean(result.rows[0].has_image) });
+  } catch (error) {
+    res.status(500).json({ error: "Error subiendo imagen" });
+  }
+});
+
+catalogRouter.get("/products/:productId/image", async (req, res) => {
+  try {
+    await ensureCatalogTables();
+    const result = await query(
+      "SELECT image_data, image_mime FROM products WHERE id = $1",
+      [req.params.productId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+    const row = result.rows[0];
+    if (!row.image_data) {
+      return res.status(404).json({ error: "Imagen no encontrada" });
+    }
+    res.setHeader("Content-Type", row.image_mime || "application/octet-stream");
+    res.send(row.image_data);
+  } catch (error) {
+    res.status(500).json({ error: "Error obteniendo imagen" });
   }
 });
 

@@ -118,6 +118,7 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isProjectDesignMode, setIsProjectDesignMode] = useState(false);
   const [activeProjectId, setActiveProjectId] = useState(null);
+  const [activeVersion, setActiveVersion] = useState(null);
   const [isBoxModalOpen, setIsBoxModalOpen] = useState(false);
   const [activeProjectStatus, setActiveProjectStatus] = useState("draft");
   const [isCableModalOpen, setIsCableModalOpen] = useState(false);
@@ -152,6 +153,7 @@ function App() {
     groupedProducts,
     handleAddProduct,
     handleProductInputKeyDown,
+    uploadProductImage,
     updateProduct,
     deleteProduct,
     handleSort,
@@ -311,6 +313,7 @@ function App() {
   useEffect(() => {
     if (!activeProjectId) return;
     const timeout = setTimeout(() => {
+      if (activeVersion?.locked) return;
       apiFetch(`/api/projects/${activeProjectId}/design`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -318,9 +321,18 @@ function App() {
       }, accessToken).catch(() => {
         // ignore
       });
+      if (activeVersion?.id) {
+        apiFetch(`/api/projects/${activeProjectId}/versions/${activeVersion.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ snapshot: { design: { boxes, cables, devices } } }),
+        }, accessToken).catch(() => {
+          // ignore
+        });
+      }
     }, 500);
     return () => clearTimeout(timeout);
-  }, [activeProjectId, boxes, cables, devices, accessToken]);
+  }, [activeProjectId, boxes, cables, devices, accessToken, activeVersion]);
 
   const restoreDesign = async (design) => {
     const nextBoxes = Array.isArray(design?.boxes) ? design.boxes : [];
@@ -340,6 +352,54 @@ function App() {
       // ignore
     }
   };
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setActiveVersion(null);
+      return;
+    }
+    try {
+      const stored = localStorage.getItem("projectActiveVersions");
+      const map = stored ? JSON.parse(stored) : {};
+      setActiveVersion(map[activeProjectId] || null);
+    } catch {
+      setActiveVersion(null);
+    }
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!activeProjectId) return;
+    try {
+      const stored = localStorage.getItem("projectActiveVersions");
+      const map = stored ? JSON.parse(stored) : {};
+      if (activeVersion?.id) {
+        map[activeProjectId] = activeVersion;
+      } else {
+        delete map[activeProjectId];
+      }
+      localStorage.setItem("projectActiveVersions", JSON.stringify(map));
+    } catch {
+      // ignore
+    }
+  }, [activeProjectId, activeVersion]);
+
+  useEffect(() => {
+    if (!activeProjectId || !activeVersion?.id) return;
+    if (String(activeProjectId).startsWith("local-")) return;
+    apiFetch(`/api/projects/${activeProjectId}/versions`, {}, accessToken)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const versions = data?.versions || [];
+        const found = versions.find((version) => version.id === activeVersion.id);
+        if (found?.snapshot?.design) {
+          restoreDesign(found.snapshot.design);
+          setActiveVersion((prev) => ({ ...prev, name: found.name || prev?.name, locked: found.locked ?? prev?.locked }));
+        }
+      })
+      .catch(() => {
+        // ignore
+      });
+  }, [activeProjectId, activeVersion?.id, accessToken]);
 
   // Auto-calculate cable lengths and total prices when boxes/cable points change.
   useEffect(() => {
@@ -1055,6 +1115,7 @@ function App() {
           productForm={productForm}
           onProductFormChange={(updates) => setProductForm((prev) => ({ ...prev, ...updates }))}
           onAddProduct={handleAddProduct}
+          onUploadProductImage={uploadProductImage}
           onProductInputKeyDown={handleProductInputKeyDown}
           groupedProducts={groupedProducts}
           onSort={handleSort}
@@ -1112,9 +1173,10 @@ function App() {
           hideStatusControls={false}
           authToken={accessToken}
           clients={clients}
-          onOpenDesigner={(projectId, status) => {
+          onOpenDesigner={(projectId, status, version) => {
             setActiveProjectId(projectId);
             setActiveProjectStatus(status || "draft");
+            setActiveVersion(version ? { id: version.id, name: version.name, locked: version.locked } : null);
             setIsProjectDesignMode(true);
             setActiveMode("select");
           }}
@@ -1179,6 +1241,10 @@ function App() {
           partsListOpen={isPartsListOpen}
           statusOptions={STATUS_OPTIONS}
           statusLabels={STATUS_LABELS}
+          activeVersion={activeVersion}
+          onSetActiveVersion={(version) => setActiveVersion(version ? { id: version.id, name: version.name, locked: version.locked } : null)}
+          onClearActiveVersion={() => setActiveVersion(null)}
+          authorName={authUser?.name || authUser?.email || ""}
         />
 
       <BoxModal

@@ -31,6 +31,15 @@ const attachmentPayloadSchema = z.object({
   items: z.array(attachmentSchema).min(1),
 });
 
+const versionPayloadSchema = z.object({
+  snapshot: z.any(),
+  name: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
+  locked: z.boolean().optional(),
+  author: z.string().optional().nullable(),
+});
+
 const ensureProjectColumns = async () => {
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS client text");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS reference text");
@@ -452,12 +461,24 @@ projectsRouter.get("/:projectId/quote.pdf", async (req, res) => {
 
 // Versions: create and list versions (adds a JSONB column if needed)
 projectsRouter.post("/:projectId/versions", async (req, res) => {
-  const snapshot = req.body?.snapshot;
-  if (!snapshot) return res.status(400).json({ error: 'Snapshot requerido' });
+  const parsed = versionPayloadSchema.safeParse(req.body);
+  if (!parsed.success || !parsed.data.snapshot) {
+    return res.status(400).json({ error: 'Snapshot requerido', details: parsed.error?.format?.() });
+  }
   try {
     // ensure column exists
     await query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS versions jsonb`);
-    const version = { id: randomUUID(), snapshot, createdAt: new Date().toISOString() };
+    const version = {
+      id: randomUUID(),
+      snapshot: parsed.data.snapshot,
+      createdAt: new Date().toISOString(),
+      name: parsed.data.name || null,
+      notes: parsed.data.notes || null,
+      status: parsed.data.status || 'draft',
+      locked: Boolean(parsed.data.locked),
+      author: parsed.data.author || null,
+      updatedAt: new Date().toISOString(),
+    };
     await query(
       `UPDATE projects SET versions = COALESCE(versions, '[]'::jsonb) || $1::jsonb WHERE id = $2`,
       [JSON.stringify(version), req.params.projectId]
@@ -477,6 +498,60 @@ projectsRouter.get("/:projectId/versions", async (req, res) => {
   } catch (error) {
     console.error('[projects] get versions error', error && error.stack ? error.stack : error);
     res.status(500).json({ error: 'Error leyendo versiones' });
+  }
+});
+
+projectsRouter.put("/:projectId/versions/:versionId", async (req, res) => {
+  const parsed = versionPayloadSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.format() });
+  }
+  try {
+    await query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS versions jsonb`);
+    const { projectId, versionId } = req.params;
+    const result = await query('SELECT versions FROM projects WHERE id = $1', [projectId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    const versions = result.rows[0].versions || [];
+    const nextVersions = versions.map((version) => {
+      if (version.id !== versionId) return version;
+      return {
+        ...version,
+        snapshot: parsed.data.snapshot ?? version.snapshot,
+        name: parsed.data.name ?? version.name,
+        notes: parsed.data.notes ?? version.notes,
+        status: parsed.data.status ?? version.status,
+        locked: parsed.data.locked ?? version.locked,
+        author: parsed.data.author ?? version.author,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    const found = versions.some((version) => version.id === versionId);
+    if (!found) return res.status(404).json({ error: 'Versión no encontrada' });
+    await query('UPDATE projects SET versions = $1::jsonb WHERE id = $2', [JSON.stringify(nextVersions), projectId]);
+    const updated = nextVersions.find((version) => version.id === versionId);
+    res.json(updated);
+  } catch (error) {
+    console.error('[projects] update version error', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: 'Error actualizando versión' });
+  }
+});
+
+projectsRouter.delete("/:projectId/versions/:versionId", async (req, res) => {
+  try {
+    await query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS versions jsonb`);
+    const { projectId, versionId } = req.params;
+    const result = await query('SELECT versions FROM projects WHERE id = $1', [projectId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Proyecto no encontrado' });
+    const versions = result.rows[0].versions || [];
+    const nextVersions = versions.filter((version) => version.id !== versionId);
+    if (nextVersions.length === versions.length) {
+      return res.status(404).json({ error: 'Versión no encontrada' });
+    }
+    await query('UPDATE projects SET versions = $1::jsonb WHERE id = $2', [JSON.stringify(nextVersions), projectId]);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[projects] delete version error', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: 'Error eliminando versión' });
   }
 });
 

@@ -16,6 +16,7 @@ function CatalogPage({
   activeSubsection,
   onSubsectionChange,
   isLoading = false,
+  authToken,
   productCategoryOptions,
   categories,
   productCategoryFilter,
@@ -23,6 +24,7 @@ function CatalogPage({
   productForm,
   onProductFormChange,
   onAddProduct,
+  onUploadProductImage,
   onProductInputKeyDown,
   groupedProducts,
   onSort,
@@ -188,6 +190,7 @@ function CatalogPage({
           <div className="catalog__content-panel">
             {isProductsSection && (
               <ProductsSection
+                authToken={authToken}
                 categories={productCategoryOptions}
                 manufacturers={manufacturers}
                 providers={providers}
@@ -196,6 +199,7 @@ function CatalogPage({
                 productForm={productForm}
                 onProductFormChange={onProductFormChange}
                 onAddProduct={onAddProduct}
+                onUploadProductImage={onUploadProductImage}
                 onProductInputKeyDown={onProductInputKeyDown}
                 groupedProducts={groupedProducts}
                 onSort={onSort}

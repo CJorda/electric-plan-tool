@@ -4,4 +4,8 @@
 .pc-modal__header h3{margin:0;font-size:16px;color:var(--text)}
 .pc-modal__close{background:#0f172a;color:#ffffff;border:1px solid #0f172a;border-radius:10px;padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600}
 .pc-modal__close:hover{filter:brightness(1.05)}
-.pc-modal__body{background:#ffffff;border:1px solid rgba(148,163,184,0.35);border-radius:16px;padding:16px;display:flex;justify-content:center;width:100%}
+.pc-modal__body{background:#ffffff;border:1px solid rgba(148,163,184,0.35);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px;justify-content:center;width:100%}
+.pc-modal__base{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pc-modal__base label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--text)}
+.pc-modal__base .app-select__trigger{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#ffffff;color:var(--text);font-size:13px}
+@media (max-width:640px){.pc-modal__base{grid-template-columns:1fr}}

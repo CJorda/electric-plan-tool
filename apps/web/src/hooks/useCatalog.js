@@ -503,7 +503,8 @@ function useCatalog({ authToken = "" } = {}) {
     };
     if (!apiEnabled) {
       const distributorName = providers.find((provider) => provider.id === payload.distributorId)?.name || "";
-      setProducts((prev) => [{ id: crypto.randomUUID(), ...payload, distributorName }, ...prev]);
+      const created = { id: crypto.randomUUID(), ...payload, distributorName };
+      setProducts((prev) => [created, ...prev]);
       setProductForm({
         category: productForm.category,
         name: "",
@@ -516,7 +517,7 @@ function useCatalog({ authToken = "" } = {}) {
         shippingCost: 0,
         leadTime: "",
       });
-      return;
+      return created;
     }
     try {
       const response = await authFetch("/api/catalog/products", {
@@ -542,9 +543,40 @@ function useCatalog({ authToken = "" } = {}) {
         shippingCost: 0,
         leadTime: "",
       });
+      return { ...created, discountPercent: percent };
     } catch {
       // ignore
     }
+  };
+
+  const fileToDataUrl = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("Error leyendo archivo"));
+      reader.readAsDataURL(file);
+    });
+
+  const uploadProductImage = async (productId, file) => {
+    if (!apiEnabled || !file) return null;
+    const dataUrl = await fileToDataUrl(file);
+    const response = await authFetch(`/api/catalog/products/${productId}/image`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dataUrl,
+        type: file.type,
+        name: file.name,
+        size: file.size,
+      }),
+    });
+    if (!response.ok) throw new Error("Error subiendo imagen");
+    setProducts((prev) =>
+      prev.map((product) =>
+        product.id === productId ? { ...product, hasImage: true } : product
+      )
+    );
+    return true;
   };
 
   const handleProductInputKeyDown = (event) => {
@@ -796,6 +828,7 @@ function useCatalog({ authToken = "" } = {}) {
     groupedProducts,
     handleAddProduct,
     handleProductInputKeyDown,
+    uploadProductImage,
     updateProduct,
     deleteProduct,
     handleSort,

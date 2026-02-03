@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import './ProjectsPage.css';
 import ProjectList from '../../components/ProjectList/ProjectList.jsx';
 import useProjects from '../../hooks/useProjects.js';
 import ProjectDeleteModal from '../../components/ProjectDeleteModal/ProjectDeleteModal.jsx';
 import ProjectCreateModal from '../../components/ProjectCreateModal/ProjectCreateModal.jsx';
 import ProjectAttachmentsModal from '../../components/ProjectAttachmentsModal/ProjectAttachmentsModal.jsx';
+import VersionDeleteModal from '../../components/VersionDeleteModal/VersionDeleteModal.jsx';
 import { apiFetch } from '../../lib/api.js';
 
 function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onProjectCreated, hideStatusControls = false, authToken = '', clients = [] }) {
@@ -23,9 +24,13 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
   const handleOpen = (projectId) => onOpenDesigner(projectId, projects.find((p) => p.id === projectId)?.status);
 
   const [confirmProject, setConfirmProject] = useState(null);
+  const [confirmVersion, setConfirmVersion] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [attachmentsProject, setAttachmentsProject] = useState(null);
   const [attachmentsByProject, setAttachmentsByProject] = useState({});
+  const [versionsByProject, setVersionsByProject] = useState({});
+  const [versionsOpenByProject, setVersionsOpenByProject] = useState({});
+  const [versionsLoadingByProject, setVersionsLoadingByProject] = useState({});
 
   const formatBytes = (value) => {
     const bytes = Number(value) || 0;
@@ -47,6 +52,184 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
   const handleDelete = (project) => {
     // open confirmation modal
     setConfirmProject(project);
+  };
+
+  const handleToggleVersions = async (project) => {
+    if (!project) return;
+    setVersionsOpenByProject((prev) => ({ ...prev, [project.id]: !prev[project.id] }));
+    if (versionsByProject[project.id] || versionsLoadingByProject[project.id]) return;
+    setVersionsLoadingByProject((prev) => ({ ...prev, [project.id]: true }));
+    try {
+      const res = await apiFetch(`/api/projects/${project.id}/versions`, {}, authToken);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setVersionsByProject((prev) => ({ ...prev, [project.id]: data.versions || [] }));
+    } catch (error) {
+      console.error('Failed to load versions', error);
+      alert('No se pudieron cargar las versiones.');
+    } finally {
+      setVersionsLoadingByProject((prev) => ({ ...prev, [project.id]: false }));
+    }
+  };
+
+  const handleSelectVersion = (project, version) => {
+    if (!project || !version) return;
+    onOpenDesigner(project.id, project.status, version);
+  };
+
+  const handleDuplicateVersion = async (project, version) => {
+    if (!project) return;
+    const duplicateName = `Copia ${new Date().toLocaleDateString()}`;
+    const versionPayload = {
+      snapshot: version?.snapshot || { design: { boxes: [], cables: [], devices: [] } },
+      name: duplicateName,
+      status: 'draft',
+      locked: false,
+    };
+
+    if (!apiEnabled) {
+      const localVersion = {
+        id: `local-${Date.now()}`,
+        ...versionPayload,
+        createdAt: new Date().toISOString(),
+      };
+      setVersionsByProject((prev) => ({
+        ...prev,
+        [project.id]: [localVersion, ...(prev[project.id] || [])],
+      }));
+      setVersionsOpenByProject((prev) => ({ ...prev, [project.id]: true }));
+      return;
+    }
+
+    try {
+      const createRes = await apiFetch(`/api/projects/${project.id}/versions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(versionPayload),
+      }, authToken);
+      if (!createRes.ok) {
+        const body = await createRes.json().catch(() => ({}));
+        throw new Error(body?.error || `HTTP ${createRes.status}`);
+      }
+      const createdVersion = await createRes.json();
+
+      setVersionsByProject((prev) => ({
+        ...prev,
+        [project.id]: [createdVersion, ...(prev[project.id] || [])],
+      }));
+      setVersionsOpenByProject((prev) => ({ ...prev, [project.id]: true }));
+      setProjects((prev) =>
+        prev.map((item) =>
+          item.id === project.id
+            ? { ...item, versions_count: (item.versions_count || 0) + 1 }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error('Failed to duplicate version', error);
+      alert('No se pudo duplicar la versión.');
+    }
+  };
+
+  const handleDeleteVersion = async (project, version) => {
+    if (!project || !version) return;
+    if (!apiEnabled) {
+      setVersionsByProject((prev) => ({
+        ...prev,
+        [project.id]: (prev[project.id] || []).filter((item) => item.id !== version.id),
+      }));
+      return;
+    }
+    try {
+      const res = await apiFetch(`/api/projects/${project.id}/versions/${version.id}`, {
+        method: 'DELETE',
+      }, authToken);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setVersionsByProject((prev) => ({
+        ...prev,
+        [project.id]: (prev[project.id] || []).filter((item) => item.id !== version.id),
+      }));
+      setProjects((prev) =>
+        prev.map((item) =>
+          item.id === project.id
+            ? { ...item, versions_count: Math.max(0, (item.versions_count || 1) - 1) }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error('Failed to delete version', error);
+      alert('No se pudo eliminar la versión.');
+    }
+  };
+
+  const handleRequestDeleteVersion = (project, version) => {
+    if (!project || !version) return;
+    setConfirmVersion({ project, version });
+  };
+
+  const handleRenameVersion = async (project, version, name) => {
+    if (!project || !version || !name) return;
+    if (!apiEnabled) {
+      setVersionsByProject((prev) => ({
+        ...prev,
+        [project.id]: (prev[project.id] || []).map((item) =>
+          item.id === version.id ? { ...item, name } : item
+        ),
+      }));
+      return;
+    }
+    try {
+      const res = await apiFetch(
+        `/api/projects/${project.id}/versions/${version.id}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        },
+        authToken
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const updated = await res.json();
+      setVersionsByProject((prev) => ({
+        ...prev,
+        [project.id]: (prev[project.id] || []).map((item) =>
+          item.id === version.id ? { ...item, name: updated.name } : item
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to rename version', error);
+      alert('No se pudo renombrar la versión.');
+    }
+  };
+
+  const handleRenameProject = async (project, name) => {
+    if (!project || !name) return;
+    if (!apiEnabled) {
+      setProjects((prev) => prev.map((item) => (item.id === project.id ? { ...item, name } : item)));
+      return;
+    }
+    try {
+      const payload = {
+        name,
+        type: project.type || 'plan',
+        client: project.client ?? null,
+        reference: project.reference ?? null,
+        address: project.address ?? null,
+        notes: project.notes ?? null,
+        status: project.status || 'draft',
+      };
+      const res = await apiFetch(`/api/projects/${project.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }, authToken);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const updated = await res.json();
+      setProjects((prev) => prev.map((item) => (item.id === project.id ? { ...item, name: updated.name } : item)));
+    } catch (error) {
+      console.error('Failed to rename project', error);
+      alert('No se pudo renombrar el proyecto.');
+    }
   };
 
   const handleOpenAttachments = async (project) => {
@@ -205,12 +388,17 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
   };
 
   const handleCreateProject = async (payload) => {
+    const baseProjectId = payload?.baseProjectId || null;
+    const baseVersionId = payload?.baseVersionId || null;
     if (apiEnabled) {
       try {
+        const cleanedPayload = { ...payload };
+        delete cleanedPayload.baseProjectId;
+        delete cleanedPayload.baseVersionId;
         const res = await apiFetch('/api/projects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(cleanedPayload),
         }, authToken);
         if (!res.ok) {
           let errBody = null;
@@ -223,10 +411,102 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
           throw new Error(msg);
         }
         const created = await res.json();
-        setProjects((prev) => [created, ...prev]);
-        onProjectCreated?.(created);
+        const readBlobAsDataUrl = (blob) =>
+          new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+
+        let initialDesign = { boxes: [], cables: [], devices: [] };
+        let baseVersionMeta = null;
+
+        if (baseProjectId) {
+          const [designRes, versionsRes, attachmentsRes] = await Promise.all([
+            apiFetch(`/api/projects/${baseProjectId}/design`, {}, authToken),
+            apiFetch(`/api/projects/${baseProjectId}/versions`, {}, authToken),
+            apiFetch(`/api/projects/${baseProjectId}/attachments`, {}, authToken),
+          ]);
+
+          const designData = designRes.ok ? await designRes.json() : { design: null };
+          const versionsData = versionsRes.ok ? await versionsRes.json() : { versions: [] };
+          const attachmentsData = attachmentsRes.ok ? await attachmentsRes.json() : { items: [] };
+
+          if (baseVersionId && Array.isArray(versionsData?.versions)) {
+            baseVersionMeta = versionsData.versions.find((version) => version.id === baseVersionId) || null;
+            if (baseVersionMeta?.snapshot?.design) {
+              initialDesign = baseVersionMeta.snapshot.design;
+            }
+          }
+
+          if (!baseVersionMeta && designData?.design) {
+            initialDesign = designData.design;
+          }
+
+          if (Array.isArray(attachmentsData?.items) && attachmentsData.items.length > 0) {
+            for (const attachment of attachmentsData.items) {
+              const fileRes = await apiFetch(
+                `/api/projects/${baseProjectId}/attachments/${attachment.id}`,
+                {},
+                authToken
+              );
+              if (!fileRes.ok) continue;
+              const blob = await fileRes.blob();
+              const dataUrl = await readBlobAsDataUrl(blob);
+              await apiFetch(
+                `/api/projects/${created.id}/attachments`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    items: [{
+                      name: attachment.name,
+                      type: attachment.mime_type || attachment.type,
+                      size: attachment.size || blob.size,
+                      dataUrl,
+                    }],
+                  }),
+                },
+                authToken
+              );
+            }
+          }
+        }
+
+        if (initialDesign) {
+          await apiFetch(`/api/projects/${created.id}/design`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ design: initialDesign }),
+          }, authToken);
+        }
+
+        const versionRes = await apiFetch(`/api/projects/${created.id}/versions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            snapshot: { design: initialDesign, createdAt: new Date().toISOString() },
+            name: baseVersionMeta?.name || 'Versión 1',
+            notes: baseVersionMeta?.notes || null,
+            status: baseVersionMeta?.status || 'draft',
+            locked: false,
+            author: baseVersionMeta?.author || null,
+          }),
+        }, authToken);
+
+        const createdVersion = versionRes.ok ? await versionRes.json() : null;
+        const createdWithVersions = { ...created, versions_count: 1 };
+        setVersionsByProject((prev) => ({
+          ...prev,
+          [created.id]: createdVersion ? [createdVersion] : [],
+        }));
+        setVersionsOpenByProject((prev) => ({ ...prev, [created.id]: true }));
+
+        setProjects((prev) => [createdWithVersions, ...prev]);
+        onProjectCreated?.(createdWithVersions);
         setIsCreateOpen(false);
-        return created;
+        return createdWithVersions;
       } catch (err) {
         console.error('Failed to create project', err);
         alert('No se pudo crear el proyecto en el servidor. ' + (err?.message || ''));
@@ -291,7 +571,16 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
             onOpen={handleOpen}
             onDelete={handleDelete}
             onAttachments={handleOpenAttachments}
+            onDuplicateVersion={handleDuplicateVersion}
+            onRequestDeleteVersion={handleRequestDeleteVersion}
+            onRenameVersion={handleRenameVersion}
+            onRenameProject={handleRenameProject}
             attachmentsByProject={attachmentsByProject}
+            versionsByProject={versionsByProject}
+            versionsOpenByProject={versionsOpenByProject}
+            versionsLoadingByProject={versionsLoadingByProject}
+            onToggleVersions={handleToggleVersions}
+            onSelectVersion={handleSelectVersion}
             onStatusChange={handleStatusChange}
             hideStatusControls={hideStatusControls}
           />
@@ -304,11 +593,23 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
         onCancel={() => setConfirmProject(null)}
         onConfirm={performDelete}
       />
+      <VersionDeleteModal
+        open={Boolean(confirmVersion)}
+        project={confirmVersion?.project}
+        version={confirmVersion?.version}
+        onCancel={() => setConfirmVersion(null)}
+        onConfirm={(project, version) => {
+          setConfirmVersion(null);
+          handleDeleteVersion(project, version);
+        }}
+      />
       <ProjectCreateModal
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onCreate={handleCreateProject}
         clients={clients}
+        projects={projects}
+        authToken={authToken}
       />
       <ProjectAttachmentsModal
         open={Boolean(attachmentsProject)}

@@ -4,7 +4,20 @@ import { apiFetch } from '../../lib/api.js';
 import QuoteAcceptModal from './QuoteAcceptModal.jsx';
 import QuoteRevisionModal from './QuoteRevisionModal.jsx';
 
-export default function QuoteActions({ projectId, projectStatus, statusOptions = [], onStatusChange, hideStatusControls = false, designSnapshot, onRestoreDesign, authToken = '' }) {
+export default function QuoteActions({
+  projectId,
+  projectStatus,
+  statusOptions = [],
+  onStatusChange,
+  hideStatusControls = false,
+  designSnapshot,
+  onRestoreDesign,
+  onSetActiveVersion,
+  onClearActiveVersion,
+  activeVersionId,
+  authToken = '',
+  authorName = '',
+}) {
   const [isAcceptOpen, setIsAcceptOpen] = useState(false);
   const [acceptState, setAcceptState] = useState('idle');
   const [isRevisionOpen, setIsRevisionOpen] = useState(false);
@@ -73,7 +86,7 @@ export default function QuoteActions({ projectId, projectStatus, statusOptions =
     loadRevisions();
   }, [projectId]);
 
-  const createRevision = async () => {
+  const createRevision = async ({ name, notes, status, locked } = {}) => {
     if (!projectId || projectId.startsWith('local-')) {
       alert('Guarda el proyecto antes de crear revisiones.');
       return;
@@ -83,7 +96,14 @@ export default function QuoteActions({ projectId, projectStatus, statusOptions =
       const res = await apiFetch(`/api/projects/${projectId}/versions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ snapshot: { design: designSnapshot, createdAt: new Date().toISOString() } }),
+        body: JSON.stringify({
+          snapshot: { design: designSnapshot, createdAt: new Date().toISOString() },
+          name,
+          notes,
+          status,
+          locked,
+          author: authorName || undefined,
+        }),
       }, authToken);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -100,6 +120,16 @@ export default function QuoteActions({ projectId, projectStatus, statusOptions =
     const snapshot = revision?.snapshot?.design;
     if (!snapshot) return alert('Revisión sin snapshot disponible.');
     await onRestoreDesign?.(snapshot);
+  };
+
+  const setActiveRevision = async (revision) => {
+    if (revision?.locked) {
+      alert('Esta versión está bloqueada y es solo lectura.');
+      return;
+    }
+    await restoreRevision(revision);
+    onSetActiveVersion?.(revision);
+    setIsRevisionOpen(false);
   };
 
   return (
@@ -125,6 +155,9 @@ export default function QuoteActions({ projectId, projectStatus, statusOptions =
         versions={revisions}
         onCreate={createRevision}
         onRestore={restoreRevision}
+        onSetActive={setActiveRevision}
+        onClearActive={onClearActiveVersion}
+        activeVersionId={activeVersionId}
         loading={revisionLoading}
       />
       <QuoteAcceptModal

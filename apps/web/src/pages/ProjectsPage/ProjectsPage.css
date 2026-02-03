@@ -257,6 +257,175 @@
   align-items: center;
 }
 
+.projects__versions-toggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.projects__versions {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+
+.projects__versions-empty {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.projects__versions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.projects__version-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.projects__version-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.projects__version-notes {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.projects__version-total {
+  font-size: 0.85rem;
+  color: var(--text);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.projects__version-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.projects__version-edit input {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.projects__version-edit-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.projects__version-rename {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.projects__version-cancel {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.projects__project-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.projects__project-edit input {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.projects__project-edit-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.projects__version-select {
+  background: #111827;
+  color: #f8fafc;
+  border: none;
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.projects__version-duplicate {
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.projects__version-delete {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.projects__version-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.projects__version-active {
+  font-size: 0.8rem;
+  color: #10b981;
+  font-weight: 700;
+}
+
+.projects__version-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
 .projects__status-select {
   display: inline-flex;
   align-items: center;

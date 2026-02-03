@@ -96,12 +96,16 @@ export const ensureCatalogTables = async () => {
       discount_price NUMERIC(12,2) NOT NULL DEFAULT 0,
       shipping_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
       lead_time TEXT,
+      image_data BYTEA,
+      image_mime TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );`
   );
   await query("ALTER TABLE products ADD COLUMN IF NOT EXISTS manufacturer TEXT");
   await query("ALTER TABLE products ADD COLUMN IF NOT EXISTS distributor_id UUID");
+  await query("ALTER TABLE products ADD COLUMN IF NOT EXISTS image_data BYTEA");
+  await query("ALTER TABLE products ADD COLUMN IF NOT EXISTS image_mime TEXT");
   await query(
     `CREATE TABLE IF NOT EXISTS product_price_history (
       id UUID PRIMARY KEY,

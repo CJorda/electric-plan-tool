@@ -1,9 +1,11 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { apiFetch } from "../../lib/api.js";
 import CustomSelect from "../ui/CustomSelect.jsx";
 import "./ProductsSection.css";
 
 function ProductsSection({
+  authToken,
   categories,
   manufacturers,
   providers,
@@ -12,6 +14,7 @@ function ProductsSection({
   productForm,
   onProductFormChange,
   onAddProduct,
+  onUploadProductImage,
   onProductInputKeyDown,
   groupedProducts,
   onSort,
@@ -20,6 +23,10 @@ function ProductsSection({
   onDeleteProduct,
 }) {
   const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [imageUrls, setImageUrls] = useState({});
+  const [newImageFile, setNewImageFile] = useState(null);
+  const [newImageUrl, setNewImageUrl] = useState("");
+
   const getDiscountedPrice = (pvp, discountPercent) => {
     const base = Number(pvp) || 0;
     const percent = Number(discountPercent) || 0;
@@ -73,6 +80,91 @@ function ProductsSection({
     [providers]
   );
 
+  const setProductImageUrl = (productId, url) => {
+    setImageUrls((prev) => {
+      const current = prev[productId];
+      if (current && current.startsWith("blob:")) {
+        URL.revokeObjectURL(current);
+      }
+      return { ...prev, [productId]: url };
+    });
+  };
+
+  const fetchProductImage = async (productId) => {
+    if (!authToken) return;
+    try {
+      const response = await apiFetch(`/api/catalog/products/${productId}/image`, {}, authToken);
+      if (!response.ok) return;
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setProductImageUrl(productId, url);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleUploadImage = async (productId, file) => {
+    if (!file || !onUploadProductImage) return;
+    await onUploadProductImage(productId, file);
+    const url = URL.createObjectURL(file);
+    setProductImageUrl(productId, url);
+  };
+
+  const handleNewImageChange = (file) => {
+    setNewImageFile(file || null);
+    if (newImageUrl && newImageUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(newImageUrl);
+    }
+    setNewImageUrl(file ? URL.createObjectURL(file) : "");
+  };
+
+  useEffect(() => {
+    if (!authToken) return;
+    groupedProducts.forEach(([, items]) => {
+      items.forEach((product) => {
+        if (product.hasImage && !imageUrls[product.id]) {
+          fetchProductImage(product.id);
+        }
+      });
+    });
+  }, [authToken, groupedProducts, imageUrls]);
+
+  useEffect(
+    () =>
+      () => {
+        Object.values(imageUrls).forEach((url) => {
+          if (url && url.startsWith("blob:")) {
+            URL.revokeObjectURL(url);
+          }
+        });
+        if (newImageUrl && newImageUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(newImageUrl);
+        }
+      },
+    [imageUrls, newImageUrl]
+  );
+
+  const handleAddProductWithImage = async () => {
+    const created = await onAddProduct?.();
+    if (created?.id && newImageFile) {
+      await handleUploadImage(created.id, newImageFile);
+      setNewImageFile(null);
+      if (newImageUrl && newImageUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(newImageUrl);
+      }
+      setNewImageUrl("");
+    }
+  };
+
+  const handleProductKeyDown = (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleAddProductWithImage();
+      return;
+    }
+    onProductInputKeyDown?.(event);
+  };
+
   return (
     <section className="products">
       <div className="products__header">
@@ -89,7 +181,11 @@ function ProductsSection({
               onChange={onFilterChange}
             />
           </label>
-          <button type="button" onClick={onAddProduct} disabled={!productForm.category}>
+          <button
+            type="button"
+            onClick={handleAddProductWithImage}
+            disabled={!productForm.category}
+          >
             Añadir producto
           </button>
         </div>
@@ -98,23 +194,28 @@ function ProductsSection({
       <div className="products__table">
         <div className="products__table-head">
           {[
-            { key: "category", label: "Categoría" },
-            { key: "name", label: "Producto" },
-            { key: "manufacturer", label: "Fabricante" },
-            { key: "distributorName", label: "Distribuidor" },
-            { key: "serial", label: "Serie fabricante" },
-            { key: "distributorPrice", label: "Precio PVP (€)" },
-            { key: "discountPercent", label: "Descuento (%)" },
-            { key: "discountPrice", label: "Precio con descuento (€)" },
-            { key: "shippingCost", label: "Gastos envío (€)" },
-            { key: "leadTime", label: "Tiempo entrega" },
-          ].map((column) => (
-            <button key={column.key} type="button" onClick={() => onSort(column.key)}>
-              {column.label}
-              {sortState.key === column.key &&
-                (sortState.direction === "asc" ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-            </button>
-          ))}
+            { key: "category", label: "Categoría", sortable: true },
+            { key: "image", label: "Foto", sortable: false },
+            { key: "name", label: "Producto", sortable: true },
+            { key: "manufacturer", label: "Fabricante", sortable: true },
+            { key: "distributorName", label: "Distribuidor", sortable: true },
+            { key: "serial", label: "Serie fabricante", sortable: true },
+            { key: "distributorPrice", label: "Precio PVP (€)", sortable: true },
+            { key: "discountPercent", label: "Descuento (%)", sortable: true },
+            { key: "discountPrice", label: "Precio con descuento (€)", sortable: true },
+            { key: "shippingCost", label: "Gastos envío (€)", sortable: true },
+            { key: "leadTime", label: "Tiempo entrega", sortable: true },
+          ].map((column) =>
+            column.sortable ? (
+              <button key={column.key} type="button" onClick={() => onSort(column.key)}>
+                {column.label}
+                {sortState.key === column.key &&
+                  (sortState.direction === "asc" ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
+              </button>
+            ) : (
+              <div key={column.key}>{column.label}</div>
+            )
+          )}
         </div>
 
         <div className="products__table-row products__table-row--new">
@@ -122,29 +223,49 @@ function ProductsSection({
             value={productForm.category}
             options={categoryOptions}
             onChange={(value) => onProductFormChange({ category: value })}
-            onKeyDown={onProductInputKeyDown}
+            onKeyDown={handleProductKeyDown}
             disabled={categories.length === 0}
           />
+          <div className="products__image-cell">
+            <label className="products__image-label">
+              {newImageUrl ? (
+                <img
+                  src={newImageUrl}
+                  alt="Previsualización"
+                  className="products__image-thumb"
+                />
+              ) : (
+                <span className="products__image-placeholder">Sin foto</span>
+              )}
+              <span className="products__image-overlay">📷 Cambiar foto</span>
+              <input
+                type="file"
+                accept="image/*"
+                className="products__image-input"
+                onChange={(event) => handleNewImageChange(event.target.files?.[0])}
+              />
+            </label>
+          </div>
           <input
             placeholder="Nombre del producto"
             name="productName"
             value={productForm.name}
             onChange={(event) => onProductFormChange({ name: event.target.value })}
-            onKeyDown={onProductInputKeyDown}
+            onKeyDown={handleProductKeyDown}
           />
           <CustomSelect
             value={productForm.manufacturer}
             options={manufacturerOptions}
             placeholder="Fabricante"
             onChange={(value) => onProductFormChange({ manufacturer: value })}
-            onKeyDown={onProductInputKeyDown}
+            onKeyDown={handleProductKeyDown}
           />
           <CustomSelect
             value={productForm.distributorId}
             options={distributorOptions}
             placeholder="Distribuidor"
             onChange={(value) => onProductFormChange({ distributorId: value })}
-            onKeyDown={onProductInputKeyDown}
+            onKeyDown={handleProductKeyDown}
           />
           <input
             placeholder="Nº serie fabricante"
@@ -152,7 +273,7 @@ function ProductsSection({
             className="products__input--serial"
             value={productForm.serial}
             onChange={(event) => onProductFormChange({ serial: event.target.value })}
-            onKeyDown={onProductInputKeyDown}
+            onKeyDown={handleProductKeyDown}
           />
           <input
             type="number"
@@ -165,7 +286,7 @@ function ProductsSection({
             onBlur={(event) =>
               onProductFormChange({ distributorPrice: formatTwoDecimals(event.target.value) })
             }
-            onKeyDown={onProductInputKeyDown}
+            onKeyDown={handleProductKeyDown}
           />
           <input
             type="number"
@@ -178,7 +299,7 @@ function ProductsSection({
             onBlur={(event) =>
               onProductFormChange({ discountPercent: formatTwoDecimals(event.target.value) })
             }
-            onKeyDown={onProductInputKeyDown}
+            onKeyDown={handleProductKeyDown}
           />
           <input
             className="products__readonly"
@@ -198,7 +319,7 @@ function ProductsSection({
             onBlur={(event) =>
               onProductFormChange({ shippingCost: formatTwoDecimals(event.target.value) })
             }
-            onKeyDown={onProductInputKeyDown}
+            onKeyDown={handleProductKeyDown}
           />
           <div className="products__leadtime-cell">
             <input
@@ -207,7 +328,7 @@ function ProductsSection({
               name="productLeadTime"
               value={productForm.leadTime}
               onChange={(event) => onProductFormChange({ leadTime: event.target.value })}
-              onKeyDown={onProductInputKeyDown}
+              onKeyDown={handleProductKeyDown}
             />
           </div>
         </div>
@@ -229,6 +350,26 @@ function ProductsSection({
                     options={categoryOptions}
                     onChange={(value) => onUpdateProduct(product.id, { category: value })}
                   />
+                  <div className="products__image-cell">
+                    <label className="products__image-label">
+                      {imageUrls[product.id] ? (
+                        <img
+                          src={imageUrls[product.id]}
+                          alt={`Foto ${product.name}`}
+                          className="products__image-thumb"
+                        />
+                      ) : (
+                        <span className="products__image-placeholder">Sin foto</span>
+                      )}
+                      <span className="products__image-overlay">📷 Cambiar foto</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="products__image-input"
+                        onChange={(event) => handleUploadImage(product.id, event.target.files?.[0])}
+                      />
+                    </label>
+                  </div>
                   <input
                     value={product.name}
                     onChange={(event) => onUpdateProduct(product.id, { name: event.target.value })}

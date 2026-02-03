@@ -315,6 +315,7 @@ function CanvasPage({
               onStatusChange={onProjectStatusChange}
               hideStatusControls={hideStatusControls}
               designSnapshot={{ boxes, cables, devices }}
+              onRestoreDesign={onRestoreDesign}
               authToken={authToken}
             />
           </React.Suspense>

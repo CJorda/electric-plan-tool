@@ -8,7 +8,16 @@ export default function ProjectList({
   onOpen,
   onDelete,
   onAttachments,
+  onDuplicateVersion,
+  onRequestDeleteVersion,
+  onRenameVersion,
+  onRenameProject,
   attachmentsByProject = {},
+  versionsByProject = {},
+  versionsOpenByProject = {},
+  versionsLoadingByProject = {},
+  onToggleVersions,
+  onSelectVersion,
   onStatusChange,
   hideStatusControls = false,
 }) {
@@ -21,10 +30,19 @@ export default function ProjectList({
           project={p}
           total={totals[p.id]}
           attachmentsCount={attachmentsByProject[p.id]?.length || 0}
+          versions={versionsByProject[p.id] || []}
+          versionsOpen={Boolean(versionsOpenByProject[p.id])}
+          versionsLoading={Boolean(versionsLoadingByProject[p.id])}
           statusOptions={STATUS_OPTIONS}
           onOpen={onOpen}
           onDelete={onDelete}
           onAttachments={onAttachments}
+          onDuplicateVersion={onDuplicateVersion}
+          onRequestDeleteVersion={onRequestDeleteVersion}
+          onRenameVersion={onRenameVersion}
+          onRenameProject={onRenameProject}
+          onToggleVersions={onToggleVersions}
+          onSelectVersion={onSelectVersion}
           onStatusChange={onStatusChange}
           hideStatusControls={hideStatusControls}
         />
