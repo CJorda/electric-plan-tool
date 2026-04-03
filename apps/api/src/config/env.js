@@ -6,6 +6,7 @@ dotenv.config();
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.string().default("4001"),
+  API_HOST: z.string().default("0.0.0.0"),
   CORS_ORIGIN: z.string().optional(),
   JWT_ACCESS_SECRET: z.string().default("dev_access_secret"),
   JWT_REFRESH_SECRET: z.string().default("dev_refresh_secret"),
@@ -18,9 +19,13 @@ const envSchema = z.object({
   PGPASSWORD: z.string().default("root"),
   PGDATABASE: z.string().default("electric_plan_tool"),
   PGSSL: z.string().default("false"),
+  PGCONNECT_TIMEOUT_MS: z.string().default("5000"),
   PGADMIN_DB: z.string().default("postgres"),
   RATE_LIMIT_WINDOW_MS: z.string().default("900000"),
   RATE_LIMIT_MAX: z.string().default("300"),
+  QUOTE_SIGNING_PRIVATE_KEY: z.string().optional(),
+  QUOTE_SIGNING_PUBLIC_KEY: z.string().optional(),
+  QUOTE_SIGNING_ALGORITHM: z.string().default("RSA-SHA256"),
 });
 
 const parsed = envSchema.safeParse(process.env);

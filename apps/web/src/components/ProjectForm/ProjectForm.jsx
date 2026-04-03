@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import CustomSelect from "../ui/CustomSelect.jsx";
+import { toastInfo } from '../../lib/toast.js';
 import './ProjectForm.css';
 
 export default function ProjectForm({
-  apiEnabled = import.meta.env.VITE_API_ENABLED === 'true',
   onCreate,
   clients = [],
 }) {
@@ -23,7 +23,10 @@ export default function ProjectForm({
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!name.trim()) return alert('El nombre es obligatorio');
+    if (!name.trim()) {
+      toastInfo('El nombre es obligatorio.');
+      return;
+    }
     setLoading(true);
     try {
       const payload = {
@@ -42,7 +45,7 @@ export default function ProjectForm({
       setAddress('');
       setNotes('');
       return created;
-    } catch (err) {
+    } catch {
       // error already handled by parent
     } finally {
       setLoading(false);

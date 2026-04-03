@@ -62,8 +62,8 @@
 }
 
 .modal__primary {
-  background: var(--accent-strong);
-  color: #ffffff;
+  background: var(--accent);
+  color: var(--on-accent);
   border: none;
   padding: 10px 16px;
   border-radius: 10px;
@@ -77,8 +77,8 @@
 }
 
 .modal__danger {
-  background: rgba(248, 113, 113, 0.2);
-  color: #fca5a5;
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
   border: none;
   padding: 10px 16px;
   border-radius: 10px;
@@ -115,9 +115,11 @@
 }
 
 .modal__list-actions button {
-  border: none;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  border-radius: 8px;
+  padding: 4px 8px;
   background: transparent;
-  color: #f87171;
+  color: var(--danger);
   cursor: pointer;
 }
 
@@ -150,7 +152,7 @@
 }
 
 .modal__error {
-  color: #f87171;
+  color: var(--danger);
   font-size: 12px;
   margin: 0;
 }

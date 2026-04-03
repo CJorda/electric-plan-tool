@@ -62,9 +62,9 @@
 }
 
 .modal--box .modal__primary {
-  background: var(--panel-strong);
-  color: var(--text);
-  border: 1px solid var(--border);
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 1px solid var(--accent);
   padding: 10px 16px;
   border-radius: 10px;
   cursor: pointer;
@@ -78,13 +78,17 @@
 }
 
 .modal__danger {
-  background: rgba(248, 113, 113, 0.2);
-  color: #fca5a5;
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
   border: none;
   padding: 10px 16px;
   border-radius: 10px;
   cursor: pointer;
   font-weight: 600;
+}
+
+.modal__danger--icon {
+  align-self: flex-end;
 }
 
 .modal__list {
@@ -116,9 +120,11 @@
 }
 
 .modal__list-actions button {
-  border: none;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  border-radius: 8px;
+  padding: 4px 8px;
   background: transparent;
-  color: #f87171;
+  color: var(--danger);
   cursor: pointer;
 }
 
@@ -151,7 +157,7 @@
 }
 
 .modal__error {
-  color: #f87171;
+  color: var(--danger);
   font-size: 12px;
   margin: 0;
 }

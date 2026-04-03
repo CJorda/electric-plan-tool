@@ -57,6 +57,35 @@ export const ensureProjectAttachmentsTable = async () => {
   );
 };
 
+export const ensureQuoteVerificationTable = async () => {
+  await query(
+    `CREATE TABLE IF NOT EXISTS quote_pdf_verifications (
+      id UUID PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      pdf_sha256 TEXT NOT NULL,
+      pdf_size INTEGER NOT NULL DEFAULT 0,
+      issued_by TEXT,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      signature_b64 TEXT,
+      signature_algorithm TEXT,
+      signature_key_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(project_id, pdf_sha256)
+    );`
+  );
+  await query("ALTER TABLE quote_pdf_verifications ADD COLUMN IF NOT EXISTS signature_b64 TEXT");
+  await query("ALTER TABLE quote_pdf_verifications ADD COLUMN IF NOT EXISTS signature_algorithm TEXT");
+  await query("ALTER TABLE quote_pdf_verifications ADD COLUMN IF NOT EXISTS signature_key_id TEXT");
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_quote_pdf_verifications_project_created
+     ON quote_pdf_verifications(project_id, created_at DESC);`
+  );
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_quote_pdf_verifications_sha256
+     ON quote_pdf_verifications(pdf_sha256);`
+  );
+};
+
 export const ensureCatalogTables = async () => {
   await query(
     `CREATE TABLE IF NOT EXISTS categories (
@@ -238,9 +267,155 @@ export const ensureAuthTables = async () => {
   );
 };
 
+export const ensureOperationsTables = async () => {
+  await query(
+    `CREATE TABLE IF NOT EXISTS inventory_items (
+      id UUID PRIMARY KEY,
+      sku TEXT NOT NULL,
+      name TEXT NOT NULL,
+      category TEXT,
+      unit TEXT NOT NULL DEFAULT 'ud',
+      min_stock NUMERIC(12,2) NOT NULL DEFAULT 0,
+      current_stock NUMERIC(12,2) NOT NULL DEFAULT 0,
+      cost_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+      sale_price NUMERIC(12,2) NOT NULL DEFAULT 0,
+      location TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(sku)
+    );`
+  );
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS purchase_orders (
+      id UUID PRIMARY KEY,
+      supplier TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      expected_date DATE,
+      total_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'EUR',
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS saved_reports (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      filters JSONB NOT NULL DEFAULT '{}'::jsonb,
+      last_run_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS approvals (
+      id UUID PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      requested_by TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      approved_by TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS planning_tasks (
+      id UUID PRIMARY KEY,
+      title TEXT NOT NULL,
+      project_id TEXT,
+      assignee TEXT,
+      start_date DATE,
+      due_date DATE,
+      priority TEXT NOT NULL DEFAULT 'medium',
+      status TEXT NOT NULL DEFAULT 'todo',
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS labor_rates (
+      id UUID PRIMARY KEY,
+      role TEXT NOT NULL,
+      hourly_rate NUMERIC(12,2) NOT NULL DEFAULT 0,
+      overtime_rate NUMERIC(12,2) NOT NULL DEFAULT 0,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      notes TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS project_templates (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      default_type TEXT,
+      default_status TEXT,
+      template_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS audit_events (
+      id UUID PRIMARY KEY,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT,
+      actor TEXT,
+      severity TEXT NOT NULL DEFAULT 'info',
+      details JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS integrations (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      base_url TEXT,
+      api_key_masked TEXT,
+      status TEXT NOT NULL DEFAULT 'inactive',
+      config JSONB NOT NULL DEFAULT '{}'::jsonb,
+      last_sync_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );`
+  );
+
+  await query(
+    `CREATE TABLE IF NOT EXISTS advanced_settings (
+      id UUID PRIMARY KEY,
+      setting_key TEXT NOT NULL,
+      setting_value JSONB NOT NULL DEFAULT '{}'::jsonb,
+      scope TEXT NOT NULL DEFAULT 'global',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(setting_key, scope)
+    );`
+  );
+};
+
 export const initDatabase = async () => {
   await ensureDatabase();
   await ensureProjectsTable();
+  await ensureProjectAttachmentsTable();
+  await ensureQuoteVerificationTable();
   await ensureCatalogTables();
   await ensureAuthTables();
+  await ensureOperationsTables();
 };

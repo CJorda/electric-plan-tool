@@ -8,7 +8,16 @@ export default defineConfig({
     host: "192.168.1.153",
     port: 5173,
     proxy: {
-      "/api": "http://localhost:4001",
+      "/api": {
+        target: "http://127.0.0.1:5050",
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on("error", (err) => {
+            console.error("[vite-proxy]", err.message);
+          });
+        },
+      },
     },
   },
 })

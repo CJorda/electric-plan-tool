@@ -1,4 +1,5 @@
 import { useState } from "react";
+import DeleteIconButton from "../ui/DeleteIconButton.jsx";
 import "./ManufacturersSection.css";
 
 export default function ManufacturersSection({
@@ -127,13 +128,10 @@ export default function ManufacturersSection({
                   onUpdateManufacturer(manufacturer.id, { notes: event.target.value })
                 }
               />
-              <button
-                type="button"
-                className="manufacturers__delete"
+              <DeleteIconButton
+                ariaLabel="Eliminar fabricante"
                 onClick={() => onDeleteManufacturer(manufacturer.id)}
-              >
-                Eliminar
-              </button>
+              />
             </div>
           ))
         )}

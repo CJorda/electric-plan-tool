@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import CustomSelect from "../../ui/CustomSelect.jsx";
+import DeleteIconButton from "../../ui/DeleteIconButton.jsx";
 import "./CameraModal.css";
 
 function CameraModal({ open, device, catalog, categoryName, onClose, onUpdate, onDelete }) {
-  if (!open || !device) return null;
   const hasCatalog = catalog.length > 0;
 
   useEffect(() => {
@@ -20,6 +20,8 @@ function CameraModal({ open, device, catalog, categoryName, onClose, onUpdate, o
       });
     }
   }, [open, device, hasCatalog, catalog, categoryName, onUpdate]);
+
+  if (!open || !device) return null;
 
   return (
     <div className="modal modal--camera">
@@ -78,9 +80,11 @@ function CameraModal({ open, device, catalog, categoryName, onClose, onUpdate, o
           />
         </label>
 
-        <button className="modal__danger" type="button" onClick={onDelete}>
-          Eliminar cámara
-        </button>
+        <DeleteIconButton
+          ariaLabel="Eliminar cámara"
+          className="modal__danger--icon"
+          onClick={onDelete}
+        />
       </div>
     </div>
   );

@@ -30,8 +30,20 @@ const shouldSkipRefresh = (url = "") =>
   url.includes("/api/auth/refresh") ||
   url.includes("/api/auth/logout");
 
+const resolveApiBaseUrl = () => {
+  const envBase = import.meta.env?.VITE_API_BASE_URL;
+  if (envBase) return String(envBase).replace(/\/$/, "");
+  return "";
+};
+
+const withApiBase = (url = "") => {
+  if (!url.startsWith("/api")) return url;
+  const base = resolveApiBaseUrl();
+  return base ? `${base}${url}` : url;
+};
+
 const tryRefreshToken = async () => {
-  const refreshResponse = await fetch("/api/auth/refresh", {
+  const refreshResponse = await fetch(withApiBase("/api/auth/refresh"), {
     method: "POST",
     credentials: "include",
   });
@@ -48,29 +60,49 @@ const tryRefreshToken = async () => {
 };
 
 export const apiFetch = async (url, options = {}, token) => {
-  let resolvedToken = token || (typeof window !== "undefined" ? localStorage.getItem("accessToken") : "");
-  if (resolvedToken && !shouldSkipRefresh(url) && isTokenExpired(resolvedToken)) {
+  const finalUrl = withApiBase(url);
+  const storedToken =
+    typeof window !== "undefined" ? localStorage.getItem("accessToken") || "" : "";
+  let resolvedToken = storedToken || token || "";
+  if (resolvedToken && !shouldSkipRefresh(finalUrl) && isTokenExpired(resolvedToken)) {
     const refreshed = await tryRefreshToken();
     if (refreshed) {
       resolvedToken = refreshed;
     }
   }
   const headers = { ...(options.headers || {}), ...getAuthHeaders(resolvedToken) };
-  const response = await fetch(url, {
+  const response = await fetch(finalUrl, {
     ...options,
     headers,
     credentials: "include",
   });
 
-  if (response.status !== 401 || shouldSkipRefresh(url)) {
+  if (response.status !== 401 || shouldSkipRefresh(finalUrl)) {
     return response;
   }
 
   try {
+    const latestStoredToken =
+      typeof window !== "undefined" ? localStorage.getItem("accessToken") || "" : "";
+    if (latestStoredToken && latestStoredToken !== resolvedToken) {
+      const retryWithStoredHeaders = {
+        ...(options.headers || {}),
+        ...getAuthHeaders(latestStoredToken),
+      };
+      const retryWithStoredToken = await fetch(finalUrl, {
+        ...options,
+        headers: retryWithStoredHeaders,
+        credentials: "include",
+      });
+      if (retryWithStoredToken.status !== 401) {
+        return retryWithStoredToken;
+      }
+    }
+
     const nextToken = await tryRefreshToken();
     if (!nextToken) return response;
     const retryHeaders = { ...(options.headers || {}), ...getAuthHeaders(nextToken) };
-    return fetch(url, {
+    return fetch(finalUrl, {
       ...options,
       headers: retryHeaders,
       credentials: "include",

@@ -1,5 +1,10 @@
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
-import CustomSelect from "../ui/CustomSelect.jsx";
+import CategoryCreateCard from "./CategoryCreateCard.jsx";
+import CategoryDeleteModal from "./CategoryDeleteModal.jsx";
+import CategoryDetailCard from "./CategoryDetailCard.jsx";
+import CategoriesTreePanel from "./CategoriesTreePanel.jsx";
+import useCategoriesTreeState from "./useCategoriesTreeState.js";
 import "./CategoriesSection.css";
 
 function CategoriesSection({
@@ -11,175 +16,126 @@ function CategoriesSection({
   onDeleteCategory,
 }) {
   const [deleteCandidate, setDeleteCandidate] = useState(null);
-  const [isSubcategory, setIsSubcategory] = useState(false);
-  const getCategoryLabel = (category) => {
-    if (!category?.parentId) return category?.name || "";
-    const parent = categories.find((item) => item.id === category.parentId);
-    return parent ? `${parent.name} / ${category.name}` : category.name;
-  };
-
-  const parentOptions = categories
-    .filter((category) => !category.parentId)
-    .map((category) => ({
-      id: category.id,
-      label: getCategoryLabel(category),
-    }));
-
-  const selectedParent = parentOptions.find((option) => option.id === categoryForm.parentId);
-  const parentName = selectedParent?.label || "";
-  const trimmedName = categoryForm.name.trim();
-  const isNameSameAsParent =
-    Boolean(isSubcategory && parentName) &&
-    trimmedName.toLowerCase() === parentName.split("/").pop()?.trim().toLowerCase();
-  const canSaveCategory =
-    trimmedName.length > 0 &&
-    (!isSubcategory || Boolean(categoryForm.parentId)) &&
-    !isNameSameAsParent;
+  const {
+    selectedCategoryId,
+    setSelectedCategoryId,
+    expandedNodeIds,
+    toggleNode,
+    categoryMeta,
+    selectedCategory,
+    parentOptions,
+    buildParentOptionsForCategory,
+    canSaveCategory,
+    isNameSameAsParent,
+    nextCategoryPath,
+  } = useCategoriesTreeState({ categories, categoryForm });
 
   const handleSaveCategory = () => {
     if (!canSaveCategory) return;
     const payload = {
       name: categoryForm.name,
       description: categoryForm.description,
-      parentId: isSubcategory ? categoryForm.parentId : "",
+      parentId: categoryForm.parentId || "",
     };
     onCategoryFormChange(payload);
     onAddCategory();
-    if (!isSubcategory) {
-      setIsSubcategory(false);
-    }
   };
+
+  const renderTreeNode = (category, depth = 0) => {
+    const children = categoryMeta.childrenByParentId.get(category.id) || [];
+    const hasChildren = children.length > 0;
+    const isExpanded = expandedNodeIds.has(category.id);
+    const isSelected = selectedCategoryId === category.id;
+
+    return (
+      <div key={category.id} className="categories__tree-node-wrap">
+        <div className="categories__tree-row" style={{ paddingLeft: `${depth * 14}px` }}>
+          <button
+            type="button"
+            className="categories__tree-toggle"
+            onClick={() => hasChildren && toggleNode(category.id)}
+            disabled={!hasChildren}
+            aria-label={hasChildren ? (isExpanded ? "Contraer" : "Expandir") : "Sin hijos"}
+          >
+            {hasChildren ? (
+              isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+            ) : (
+              <span className="categories__tree-toggle-spacer" />
+            )}
+          </button>
+          <button
+            type="button"
+            className={`categories__tree-node ${isSelected ? "is-active" : ""}`}
+            onClick={() => setSelectedCategoryId(category.id)}
+          >
+            <span>{category.name}</span>
+            <span className="categories__tree-count">{children.length}</span>
+          </button>
+        </div>
+        {hasChildren && isExpanded && (
+          <div className="categories__tree-children">
+            {children.map((child) => renderTreeNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <section className="products">
+    <section className="products categories">
       <div className="products__header">
         <div>
           <h2>Catálogo · Categorías</h2>
-          <p>Gestiona las categorías disponibles en el catálogo.</p>
+          <p>Gestiona categorías en forma de árbol y edita su jerarquía.</p>
         </div>
         <div className="products__controls products__controls--right">
-          <button
-            className="categories__action"
-            type="button"
-            onClick={handleSaveCategory}
-            disabled={!canSaveCategory}
-          >
+          <button className="categories__action" type="button" onClick={handleSaveCategory} disabled={!canSaveCategory}>
             Añadir categoría
           </button>
         </div>
       </div>
-      <div className="products__table">
-        <div className="products__table-head products__table-head--categories">
-          <span>Categoría</span>
-          <span>Subcategoría de</span>
-          <span>Descripción</span>
-          <span>Acciones</span>
-        </div>
-        <div className="products__table-row products__table-row--new products__table-row--categories">
-          <input
-            placeholder="Nombre"
-            value={categoryForm.name}
-            onChange={(event) => onCategoryFormChange({ name: event.target.value })}
+
+      <div className="categories__layout">
+        <CategoriesTreePanel
+          selectedCategoryId={selectedCategoryId}
+          categoriesCount={categories.length}
+          rootCategories={categoryMeta.rootCategories}
+          renderTreeNode={renderTreeNode}
+          onSelectAll={() => setSelectedCategoryId("")}
+        />
+
+        <div className="categories__editor">
+          <CategoryCreateCard
+            categoryForm={categoryForm}
+            parentOptions={parentOptions}
+            nextCategoryPath={nextCategoryPath}
+            selectedCategory={selectedCategory}
+            isNameSameAsParent={isNameSameAsParent}
+            onCategoryFormChange={onCategoryFormChange}
           />
-          <div className="categories__parent">
-            <div className="categories__parent-row">
-              <label className="categories__checkbox">
-                <input
-                  type="checkbox"
-                  checked={isSubcategory}
-                  onChange={(event) => {
-                    const nextValue = event.target.checked;
-                    setIsSubcategory(nextValue);
-                    if (!nextValue) {
-                      onCategoryFormChange({ parentId: "" });
-                    }
-                  }}
-                />
-                Es subcategoría
-              </label>
-              <CustomSelect
-                value={categoryForm.parentId || ""}
-                options={[
-                  { value: "", label: "Selecciona padre" },
-                  ...parentOptions.map((option) => ({ value: option.id, label: option.label })),
-                ]}
-                onChange={(value) => onCategoryFormChange({ parentId: value })}
-                disabled={!isSubcategory}
-              />
-            </div>
-            {isNameSameAsParent && (
-              <span className="categories__hint">La subcategoría debe ser distinta al padre.</span>
-            )}
-          </div>
-          <input
-            placeholder="Descripción"
-            value={categoryForm.description}
-            onChange={(event) => onCategoryFormChange({ description: event.target.value })}
+
+          <CategoryDetailCard
+            selectedCategory={selectedCategory}
+            depthById={categoryMeta.depthById}
+            pathById={categoryMeta.pathById}
+            buildParentOptionsForCategory={buildParentOptionsForCategory}
+            onUpdateCategory={onUpdateCategory}
+            onRequestDelete={setDeleteCandidate}
           />
-          <span />
         </div>
-        {categories.length === 0 ? (
-          <div className="products__empty">Aún no hay categorías creadas.</div>
-        ) : (
-          categories.map((category) => (
-            <div key={category.id} className="products__table-row products__table-row--categories">
-              <input
-                value={category.name}
-                onChange={(event) => onUpdateCategory(category.id, { name: event.target.value })}
-              />
-              <CustomSelect
-                value={category.parentId || ""}
-                options={[
-                  { value: "", label: "Sin padre" },
-                  ...parentOptions
-                    .filter((option) => option.id !== category.id)
-                    .map((option) => ({ value: option.id, label: option.label })),
-                ]}
-                onChange={(value) => onUpdateCategory(category.id, { parentId: value || null })}
-              />
-              <input
-                value={category.description}
-                onChange={(event) => onUpdateCategory(category.id, { description: event.target.value })}
-              />
-              <button
-                className="categories__delete"
-                type="button"
-                onClick={() => setDeleteCandidate(category)}
-              >
-                X
-              </button>
-            </div>
-          ))
-        )}
       </div>
-      {deleteCandidate && (
-        <div className="categories__modal-overlay" role="dialog" aria-modal="true">
-          <div className="categories__modal">
-            <h3>¿Eliminar categoría?</h3>
-            <p>
-              Se eliminará <strong>{deleteCandidate.name}</strong> y todos sus productos asociados.
-            </p>
-            <div className="categories__modal-actions">
-              <button
-                className="categories__modal-cancel"
-                type="button"
-                onClick={() => setDeleteCandidate(null)}
-              >
-                Cancelar
-              </button>
-              <button
-                className="categories__modal-confirm"
-                type="button"
-                onClick={() => {
-                  onDeleteCategory(deleteCandidate.id);
-                  setDeleteCandidate(null);
-                }}
-              >
-                Sí, eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
+      <CategoryDeleteModal
+        open={Boolean(deleteCandidate)}
+        categoryName={deleteCandidate?.name}
+        onCancel={() => setDeleteCandidate(null)}
+        onConfirm={() => {
+          if (deleteCandidate) {
+            onDeleteCategory(deleteCandidate.id);
+          }
+          setDeleteCandidate(null);
+        }}
+      />
     </section>
   );
 }

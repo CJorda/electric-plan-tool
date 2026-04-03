@@ -12,8 +12,6 @@ export default function QuoteRevisionModal({
   activeVersionId,
   loading,
 }) {
-  if (!open) return null;
-
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState('draft');
@@ -22,6 +20,8 @@ export default function QuoteRevisionModal({
     () => [...versions].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
     [versions]
   );
+
+  if (!open) return null;
 
   return (
     <div className="qr-modal-backdrop" onClick={onClose}>

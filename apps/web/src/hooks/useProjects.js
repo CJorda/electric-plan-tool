@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api.js';
 
 export default function useProjects({ apiEnabled, authToken = '' }) {
@@ -15,7 +15,7 @@ export default function useProjects({ apiEnabled, authToken = '' }) {
     }
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setIsLoading(true);
     setError('');
     if (!apiEnabled) {
@@ -28,17 +28,17 @@ export default function useProjects({ apiEnabled, authToken = '' }) {
       if (!res.ok) throw new Error('Error');
       const data = await res.json();
       setProjects(data.items || []);
-    } catch (e) {
+    } catch {
       setError('API no disponible. Usando locales.');
       setProjects(readLocalProjects());
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [apiEnabled, authToken]);
 
   useEffect(() => {
     load();
-  }, [apiEnabled, authToken]);
+  }, [load]);
 
   return { projects, setProjects, isLoading, error, reload: load };
 }

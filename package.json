@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "pnpm -C apps/web dev",
+    "dev": "concurrently \"pnpm -C apps/api dev\" \"pnpm -C apps/web dev\"",
     "dev:web": "pnpm -C apps/web dev",
     "dev:api": "pnpm -C apps/api dev",
     "dev:all": "concurrently \"pnpm -C apps/api dev\" \"pnpm -C apps/web dev\"",
@@ -12,10 +12,10 @@
     "preview:web": "pnpm -C apps/web preview"
   },
   "devDependencies": {
-    "concurrently": "^9.2.0"
+    "concurrently": "^9.2.1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@10.10.0"
+  "packageManager": "pnpm@10.33.0"
 }

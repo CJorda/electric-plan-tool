@@ -8,6 +8,12 @@ export const corsOptions = {
     return callback(new Error("CORS not allowed"));
   },
   credentials: true,
+  exposedHeaders: [
+    "X-Quote-Sha256",
+    "X-Quote-Signature",
+    "X-Quote-Signature-Alg",
+    "X-Quote-Signature-Key-Id",
+  ],
   optionsSuccessStatus: 200,
 };
 

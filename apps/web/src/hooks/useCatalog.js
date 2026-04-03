@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../lib/api.js";
 
 function useCatalog({ authToken = "" } = {}) {
   const apiEnabled = import.meta.env.VITE_API_ENABLED === "true";
-  const authFetch = (url, options) => apiFetch(url, options, authToken);
+  const authFetch = useCallback((url, options) => apiFetch(url, options, authToken), [authToken]);
   const [isLoading, setIsLoading] = useState(false);
   const [productForm, setProductForm] = useState({
     category: "",
@@ -60,16 +60,18 @@ function useCatalog({ authToken = "" } = {}) {
   const categoryLabelMap = useMemo(() => {
     const map = new Map();
     const byId = new Map(categories.map((category) => [category.id, category]));
-    const getLabel = (category, depth = 0) => {
+    const getLabel = (category, stack = new Set()) => {
       if (!category) return "";
       if (map.has(category.id)) return map.get(category.id);
-      if (depth > 5) return category.name;
+      if (stack.has(category.id)) return category.name;
       if (!category.parentId) {
         map.set(category.id, category.name);
         return category.name;
       }
+      const nextStack = new Set(stack);
+      nextStack.add(category.id);
       const parent = byId.get(category.parentId);
-      const parentLabel = parent ? getLabel(parent, depth + 1) : "";
+      const parentLabel = parent ? getLabel(parent, nextStack) : "";
       const label = parentLabel ? `${parentLabel} / ${category.name}` : category.name;
       map.set(category.id, label);
       return label;
@@ -299,6 +301,48 @@ function useCatalog({ authToken = "" } = {}) {
       setMargins((prev) => prev.filter((m) => m.id !== marginId));
     } catch {
       // ignore
+    }
+  };
+
+  const updateMargin = async (marginId, updates) => {
+    const providerId = updates?.providerId;
+    const categoryId = updates?.categoryId;
+    const marginPercent = Number(updates?.marginPercent) || 0;
+    if (!providerId || !categoryId) return;
+
+    if (!apiEnabled) {
+      const provider = providers.find((p) => p.id === providerId);
+      const category = categories.find((c) => c.id === categoryId);
+      setMargins((prev) =>
+        prev.map((margin) =>
+          margin.id === marginId
+            ? {
+                ...margin,
+                providerId,
+                providerName: provider?.name || margin.providerName,
+                categoryId,
+                categoryName: category?.name || margin.categoryName,
+                marginPercent,
+              }
+            : margin
+        )
+      );
+      return;
+    }
+
+    try {
+      const response = await authFetch(`/api/catalog/margins/${marginId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ providerId, categoryId, marginPercent }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || `Error actualizando margen (${response.status})`);
+      }
+      await loadMargins();
+    } catch (error) {
+      alert(error?.message || "No se pudo actualizar el margen.");
     }
   };
 
@@ -666,8 +710,8 @@ function useCatalog({ authToken = "" } = {}) {
     return products.filter((product) => product.category === productCategoryFilter);
   }, [productCategoryFilter, products]);
 
-  const sortedProducts = useMemo(() => {
-    const sorted = [...filteredProducts];
+  const sortProductsList = useCallback((items) => {
+    const sorted = [...items];
     const { key, direction } = productSort;
     sorted.sort((a, b) => {
       const valueA = key === "discountPercent" ? a.discountPercent ?? 0 : a[key];
@@ -680,7 +724,15 @@ function useCatalog({ authToken = "" } = {}) {
         : String(valueB ?? "").localeCompare(String(valueA ?? ""));
     });
     return sorted;
-  }, [filteredProducts, productSort]);
+  }, [productSort]);
+
+  const sortedProducts = useMemo(() => {
+    return sortProductsList(filteredProducts);
+  }, [filteredProducts, sortProductsList]);
+
+  const allSortedProducts = useMemo(() => {
+    return sortProductsList(products);
+  }, [products, sortProductsList]);
 
   const groupedProducts = useMemo(() => {
     const groups = new Map();
@@ -702,7 +754,7 @@ function useCatalog({ authToken = "" } = {}) {
       });
   }, [productCategoryNames, sortedProducts, categories, categoryLabelMap]);
 
-  const loadMargins = async () => {
+  const loadMargins = useCallback(async () => {
     if (!apiEnabled) return;
     try {
       const res = await authFetch("/api/catalog/margins");
@@ -713,9 +765,9 @@ function useCatalog({ authToken = "" } = {}) {
     } catch {
       // ignore
     }
-  };
+  }, [apiEnabled, authFetch]);
 
-  const loadTemplateMargins = async (templateId) => {
+  const loadTemplateMargins = useCallback(async (templateId) => {
     if (!apiEnabled || !templateId) return;
     try {
       const res = await authFetch(`/api/catalog/templates/${templateId}/margins`);
@@ -726,7 +778,7 @@ function useCatalog({ authToken = "" } = {}) {
     } catch {
       // ignore
     }
-  };
+  }, [apiEnabled, authFetch]);
 
   useEffect(() => {
     const loadCatalog = async () => {
@@ -778,7 +830,7 @@ function useCatalog({ authToken = "" } = {}) {
       }
     };
     loadCatalog();
-  }, [apiEnabled, authToken]);
+  }, [apiEnabled, authFetch]);
 
   useEffect(() => {
     if (!apiEnabled) return;
@@ -787,7 +839,7 @@ function useCatalog({ authToken = "" } = {}) {
     } else {
       setTemplateMargins([]);
     }
-  }, [apiEnabled, selectedTemplateId, authToken]);
+  }, [apiEnabled, selectedTemplateId, loadTemplateMargins]);
 
   useEffect(() => {
     if (!productCategoryNames.includes(productForm.category)) {
@@ -826,6 +878,7 @@ function useCatalog({ authToken = "" } = {}) {
     categories,
     productCategoryOptions,
     groupedProducts,
+    allSortedProducts,
     handleAddProduct,
     handleProductInputKeyDown,
     uploadProductImage,
@@ -851,6 +904,7 @@ function useCatalog({ authToken = "" } = {}) {
     updateManufacturer,
     deleteManufacturer,
     handleAddMargin,
+    updateMargin,
     deleteMargin,
     templates,
     templateForm,

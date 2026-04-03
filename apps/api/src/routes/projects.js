@@ -1,8 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
-import { query, ensureProjectAttachmentsTable } from "../db.js";
-import { randomUUID } from "crypto";
-import { streamQuotePdf } from "../lib/quotePdf.js";
+import { query, ensureProjectAttachmentsTable, ensureQuoteVerificationTable } from "../db.js";
+import { createHash, randomUUID } from "crypto";
+import { buildQuotePdfBuffer } from "../lib/quotePdf.js";
+import {
+  getQuoteSigningPublicInfo,
+  signQuoteHash,
+  verifyQuoteHashSignature,
+} from "../lib/quoteSignature.js";
 import { requireAuth } from "../middleware/auth.js";
 
 export const projectsRouter = Router();
@@ -40,6 +45,25 @@ const versionPayloadSchema = z.object({
   author: z.string().optional().nullable(),
 });
 
+const quoteVerificationPayloadSchema = z
+  .object({
+    sha256: z.string().optional().nullable(),
+    dataUrl: z.string().optional().nullable(),
+    base64: z.string().optional().nullable(),
+  })
+  .refine(
+    (payload) =>
+      Boolean(
+        String(payload.sha256 || "").trim() ||
+          String(payload.dataUrl || "").trim() ||
+          String(payload.base64 || "").trim()
+      ),
+    {
+    message: "Debes enviar sha256, dataUrl o base64",
+    path: ["sha256"],
+    }
+  );
+
 const ensureProjectColumns = async () => {
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS client text");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS reference text");
@@ -59,6 +83,20 @@ const decodeDataUrl = (dataUrl = "") => {
   const mime = match[1] || "application/octet-stream";
   const data = Buffer.from(match[2], "base64");
   return { mime, data };
+};
+
+const normalizeSha256 = (value = "") => String(value || "").trim().toLowerCase();
+
+const isValidSha256 = (value = "") => /^[a-f0-9]{64}$/i.test(value);
+
+const decodeBase64Payload = (base64 = "") => {
+  try {
+    const normalized = String(base64 || "").trim();
+    if (!normalized) return null;
+    return Buffer.from(normalized, "base64");
+  } catch {
+    return null;
+  }
 };
 
 /**
@@ -375,7 +413,11 @@ projectsRouter.get("/:projectId/quote", async (req, res) => {
     if (req.params.projectId.startsWith("local-")) {
       return res.status(400).json({ error: "Proyecto local no guardado. Guarda el proyecto antes de generar presupuesto." });
     }
-    const result = await query("SELECT id, name, type, notes, status, design FROM projects WHERE id = $1", [req.params.projectId]);
+    await ensureProjectColumns();
+    const result = await query(
+      "SELECT id, name, type, client, reference, address, notes, status, design FROM projects WHERE id = $1",
+      [req.params.projectId]
+    );
     if (result.rows.length === 0) return res.status(404).json({ error: "Proyecto no encontrado" });
     const project = result.rows[0];
     const design = project.design || { boxes: [], cables: [] };
@@ -413,6 +455,9 @@ projectsRouter.get("/:projectId/quote", async (req, res) => {
       projectId: project.id,
       name: project.name,
       type: project.type,
+      client: project.client,
+      reference: project.reference,
+      address: project.address,
       notes: project.notes,
       items: allItems,
       subtotal,
@@ -433,7 +478,11 @@ projectsRouter.get("/:projectId/quote.pdf", async (req, res) => {
     if (req.params.projectId.startsWith("local-")) {
       return res.status(400).json({ error: "Proyecto local no guardado. Guarda el proyecto antes de generar PDF." });
     }
-    const result = await query("SELECT id, name, type, notes, status, design FROM projects WHERE id = $1", [req.params.projectId]);
+    await ensureProjectColumns();
+    const result = await query(
+      "SELECT id, name, type, client, reference, address, notes, status, design FROM projects WHERE id = $1",
+      [req.params.projectId]
+    );
     if (result.rows.length === 0) return res.status(404).json({ error: "Proyecto no encontrado" });
     const project = result.rows[0];
     const design = project.design || { boxes: [], cables: [], devices: [] };
@@ -452,10 +501,258 @@ projectsRouter.get("/:projectId/quote.pdf", async (req, res) => {
       items.push({ desc: d.model || d.name || 'Dispositivo', qty: 1, unit: Number(d.unitPrice) || 0, total: Number(d.total) || Number(d.unitPrice) || 0 });
     });
 
-    await streamQuotePdf(res, project, items, { taxes: 0 });
+    const issuedBy = req.user?.email || req.user?.sub || null;
+    const verificationId = randomUUID();
+    const verificationIssuedAt = new Date().toISOString();
+    const pdfBuffer = await buildQuotePdfBuffer(project, items, {
+      taxes: 0,
+      verification: {
+        id: verificationId,
+        issuedAt: verificationIssuedAt,
+        issuedBy,
+        verifyHint: `/api/projects/${project.id}/quote/verification/latest`,
+      },
+    });
+    const pdfSha256 = createHash("sha256").update(pdfBuffer).digest("hex");
+    const subtotal = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+    const signatureResult = signQuoteHash(pdfSha256);
+    const signatureB64 = signatureResult.signed ? signatureResult.signatureB64 : null;
+    const signatureAlgorithm = signatureResult.signed ? signatureResult.algorithm : null;
+    const signatureKeyId = signatureResult.signed ? signatureResult.keyId : null;
+
+    await ensureQuoteVerificationTable();
+    await query(
+      `INSERT INTO quote_pdf_verifications (
+         id,
+         project_id,
+         pdf_sha256,
+         pdf_size,
+         issued_by,
+         metadata,
+         signature_b64,
+         signature_algorithm,
+         signature_key_id
+       )
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
+       ON CONFLICT (project_id, pdf_sha256)
+       DO UPDATE SET
+         pdf_size = EXCLUDED.pdf_size,
+         issued_by = EXCLUDED.issued_by,
+         metadata = EXCLUDED.metadata,
+         signature_b64 = COALESCE(EXCLUDED.signature_b64, quote_pdf_verifications.signature_b64),
+         signature_algorithm = COALESCE(EXCLUDED.signature_algorithm, quote_pdf_verifications.signature_algorithm),
+         signature_key_id = COALESCE(EXCLUDED.signature_key_id, quote_pdf_verifications.signature_key_id)`,
+      [
+        verificationId,
+        project.id,
+        pdfSha256,
+        pdfBuffer.length,
+        issuedBy,
+        JSON.stringify({
+          verificationId,
+          verificationIssuedAt,
+          projectStatus: project.status || "draft",
+          itemsCount: items.length,
+          subtotal,
+          taxes: 0,
+          total: subtotal,
+          signature: {
+            signed: Boolean(signatureB64),
+            algorithm: signatureAlgorithm,
+            keyId: signatureKeyId,
+            reason: signatureResult.signed ? "ok" : signatureResult.reason || null,
+          },
+        }),
+        signatureB64,
+        signatureAlgorithm,
+        signatureKeyId,
+      ]
+    );
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="quote-${project.id}.pdf"`);
+    res.setHeader("X-Quote-Sha256", pdfSha256);
+    if (signatureB64) {
+      res.setHeader("X-Quote-Signature", signatureB64);
+      if (signatureAlgorithm) {
+        res.setHeader("X-Quote-Signature-Alg", signatureAlgorithm);
+      }
+      if (signatureKeyId) {
+        res.setHeader("X-Quote-Signature-Key-Id", signatureKeyId);
+      }
+    }
+    res.send(pdfBuffer);
   } catch (error) {
     console.error('[projects] quote.pdf error', error && error.stack ? error.stack : error);
-    try { res.status(500).json({ error: 'Error generando PDF' }); } catch (e) { /* ignore */ }
+    if (!res.headersSent && !res.writableEnded) {
+      try {
+        res.status(500).json({ error: 'Error generando PDF' });
+      } catch {
+        // ignore
+      }
+    }
+  }
+});
+
+projectsRouter.get("/:projectId/quote/verification/latest", async (req, res) => {
+  try {
+    await ensureQuoteVerificationTable();
+    const projectResult = await query("SELECT id FROM projects WHERE id = $1", [req.params.projectId]);
+    if (!projectResult.rows.length) {
+      return res.status(404).json({ error: "Proyecto no encontrado" });
+    }
+
+    const result = await query(
+      `SELECT id, project_id, pdf_sha256, pdf_size, issued_by, metadata, signature_b64, signature_algorithm, signature_key_id, created_at
+       FROM quote_pdf_verifications
+       WHERE project_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [req.params.projectId]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "No hay verificación registrada para este proyecto" });
+    }
+
+    const row = result.rows[0];
+    res.json({
+      verificationId: row.id,
+      projectId: row.project_id,
+      sha256: row.pdf_sha256,
+      pdfSize: Number(row.pdf_size) || 0,
+      issuedBy: row.issued_by,
+      metadata: row.metadata || {},
+      signature: row.signature_b64
+        ? {
+            present: true,
+            algorithm: row.signature_algorithm || null,
+            keyId: row.signature_key_id || null,
+          }
+        : {
+            present: false,
+            algorithm: null,
+            keyId: null,
+          },
+      createdAt: row.created_at,
+    });
+  } catch (error) {
+    console.error('[projects] quote latest verification error', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: "Error consultando verificación" });
+  }
+});
+
+projectsRouter.get("/:projectId/quote/verification/public-key", async (req, res) => {
+  try {
+    await ensureQuoteVerificationTable();
+    const projectResult = await query("SELECT id FROM projects WHERE id = $1", [req.params.projectId]);
+    if (!projectResult.rows.length) {
+      return res.status(404).json({ error: "Proyecto no encontrado" });
+    }
+
+    const signingInfo = getQuoteSigningPublicInfo();
+    if (!signingInfo.hasPublicKey || !signingInfo.publicKey) {
+      return res.status(404).json({ error: "Firma digital no configurada" });
+    }
+
+    res.json({
+      enabled: signingInfo.enabled,
+      configured: signingInfo.configured,
+      algorithm: signingInfo.algorithm,
+      keyId: signingInfo.keyId,
+      publicKey: signingInfo.publicKey,
+      setupError: signingInfo.setupError || null,
+    });
+  } catch (error) {
+    console.error('[projects] quote public key error', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: "Error consultando clave pública" });
+  }
+});
+
+projectsRouter.post("/:projectId/quote/verification/verify", async (req, res) => {
+  const parsed = quoteVerificationPayloadSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Payload inválido", details: parsed.error.format() });
+  }
+
+  try {
+    await ensureQuoteVerificationTable();
+    const projectResult = await query("SELECT id FROM projects WHERE id = $1", [req.params.projectId]);
+    if (!projectResult.rows.length) {
+      return res.status(404).json({ error: "Proyecto no encontrado" });
+    }
+
+    let providedSha256 = normalizeSha256(parsed.data.sha256 || "");
+    if (providedSha256 && !isValidSha256(providedSha256)) {
+      return res.status(400).json({ error: "sha256 inválido" });
+    }
+
+    if (!providedSha256) {
+      let payloadBuffer = null;
+      if (parsed.data.dataUrl) {
+        payloadBuffer = decodeDataUrl(parsed.data.dataUrl)?.data || null;
+      } else if (parsed.data.base64) {
+        payloadBuffer = decodeBase64Payload(parsed.data.base64);
+      }
+
+      if (!payloadBuffer || !payloadBuffer.length) {
+        return res.status(400).json({ error: "No se pudo calcular hash del archivo recibido" });
+      }
+
+      providedSha256 = createHash("sha256").update(payloadBuffer).digest("hex");
+    }
+
+    const result = await query(
+      `SELECT id, project_id, pdf_sha256, pdf_size, issued_by, metadata, signature_b64, signature_algorithm, signature_key_id, created_at
+       FROM quote_pdf_verifications
+       WHERE project_id = $1 AND pdf_sha256 = $2
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [req.params.projectId, providedSha256]
+    );
+
+    if (!result.rows.length) {
+      return res.json({
+        valid: false,
+        projectId: req.params.projectId,
+        providedSha256,
+        match: null,
+      });
+    }
+
+    const row = result.rows[0];
+    const signatureCheck = row.signature_b64
+      ? verifyQuoteHashSignature({
+          sha256: row.pdf_sha256,
+          signatureB64: row.signature_b64,
+          algorithm: row.signature_algorithm,
+          keyId: row.signature_key_id,
+        })
+      : null;
+
+    res.json({
+      valid: true,
+      projectId: row.project_id,
+      providedSha256,
+      match: {
+        verificationId: row.id,
+        sha256: row.pdf_sha256,
+        pdfSize: Number(row.pdf_size) || 0,
+        issuedBy: row.issued_by,
+        metadata: row.metadata || {},
+        signature: {
+          present: Boolean(row.signature_b64),
+          algorithm: row.signature_algorithm || null,
+          keyId: row.signature_key_id || null,
+          verified: signatureCheck ? Boolean(signatureCheck.valid) : null,
+          reason: signatureCheck ? signatureCheck.reason : "not_signed",
+        },
+        createdAt: row.created_at,
+      },
+    });
+  } catch (error) {
+    console.error('[projects] quote verify error', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: "Error verificando presupuesto" });
   }
 });
 

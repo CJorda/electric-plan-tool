@@ -1,4 +1,5 @@
 import CustomSelect from "../../ui/CustomSelect.jsx";
+import DeleteIconButton from "../../ui/DeleteIconButton.jsx";
 import "./BoxModal.css";
 
 function BoxModal({
@@ -141,9 +142,11 @@ function BoxModal({
           )}
         </div>
 
-        <button className="modal__danger" type="button" onClick={onDeleteBox}>
-          Eliminar cuadro
-        </button>
+        <DeleteIconButton
+          ariaLabel="Eliminar cuadro"
+          className="modal__danger--icon"
+          onClick={onDeleteBox}
+        />
       </div>
     </div>
   );

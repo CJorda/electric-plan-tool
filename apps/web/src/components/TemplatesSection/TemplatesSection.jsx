@@ -1,4 +1,5 @@
 import CustomSelect from "../ui/CustomSelect.jsx";
+import DeleteIconButton from "../ui/DeleteIconButton.jsx";
 import './TemplatesSection.css';
 
 export default function TemplatesSection({
@@ -87,7 +88,10 @@ export default function TemplatesSection({
               <div key={margin.id} className="templates__table-row">
                 <span>{margin.categoryName}</span>
                 <span>{Number(margin.marginPercent).toFixed(1)}%</span>
-                <button type="button" onClick={() => onDeleteTemplateMargin(margin.id)}>Eliminar</button>
+                <DeleteIconButton
+                  ariaLabel="Eliminar margen de plantilla"
+                  onClick={() => onDeleteTemplateMargin(margin.id)}
+                />
               </div>
             ))}
           </div>

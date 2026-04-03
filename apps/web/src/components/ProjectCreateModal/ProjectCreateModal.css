@@ -1,11 +1,11 @@
 .pc-modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px;z-index:2000}
-.pc-modal{background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);border:1px solid rgba(148,163,184,0.35);padding:24px;border-radius:20px;max-width:560px;width:100%;color:var(--text);display:flex;flex-direction:column;gap:16px;box-shadow:0 28px 70px rgba(15,23,42,0.45)}
-.pc-modal__header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:10px;border-bottom:1px solid rgba(148,163,184,0.3)}
+.pc-modal{background:var(--panel);border:1px solid var(--border);padding:24px;border-radius:20px;max-width:560px;width:100%;color:var(--text);display:flex;flex-direction:column;gap:16px;box-shadow:0 28px 70px rgba(15,23,42,0.45)}
+.pc-modal__header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
 .pc-modal__header h3{margin:0;font-size:16px;color:var(--text)}
-.pc-modal__close{background:#0f172a;color:#ffffff;border:1px solid #0f172a;border-radius:10px;padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600}
+.pc-modal__close{background:var(--panel-strong);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600}
 .pc-modal__close:hover{filter:brightness(1.05)}
-.pc-modal__body{background:#ffffff;border:1px solid rgba(148,163,184,0.35);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px;justify-content:center;width:100%}
+.pc-modal__body{background:var(--panel-strong);border:1px solid var(--border);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px;justify-content:center;width:100%}
 .pc-modal__base{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .pc-modal__base label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--text)}
-.pc-modal__base .app-select__trigger{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#ffffff;color:var(--text);font-size:13px}
+.pc-modal__base .app-select__trigger{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:13px}
 @media (max-width:640px){.pc-modal__base{grid-template-columns:1fr}}

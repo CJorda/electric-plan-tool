@@ -25,6 +25,7 @@ const envConfig = {
   password: env.PGPASSWORD || "root",
   database: env.PGDATABASE || "electric_plan_tool",
   ssl: env.PGSSL === "true" ? { rejectUnauthorized: false } : undefined,
+  connectionTimeoutMillis: Number(env.PGCONNECT_TIMEOUT_MS || 5000),
 };
 
 export const baseConfig = parseDatabaseUrl() ?? envConfig;

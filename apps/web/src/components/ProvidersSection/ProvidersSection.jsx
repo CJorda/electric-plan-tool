@@ -1,4 +1,5 @@
 import { useState } from "react";
+import DeleteIconButton from "../ui/DeleteIconButton.jsx";
 import "./ProvidersSection.css";
 
 export default function ProvidersSection({
@@ -112,13 +113,10 @@ export default function ProvidersSection({
                 value={provider.notes || ""}
                 onChange={(event) => onUpdateProvider(provider.id, { notes: event.target.value })}
               />
-              <button
-                type="button"
-                className="providers__delete"
+              <DeleteIconButton
+                ariaLabel="Eliminar distribuidor"
                 onClick={() => onDeleteProvider(provider.id)}
-              >
-                X
-              </button>
+              />
             </div>
           ))
         )}

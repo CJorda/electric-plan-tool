@@ -5,8 +5,6 @@ import CustomSelect from '../ui/CustomSelect.jsx';
 import { apiFetch } from '../../lib/api.js';
 
 export default function ProjectCreateModal({ open, onClose, onCreate, clients = [], projects = [], authToken = '' }) {
-  if (!open) return null;
-
   const [baseProjectId, setBaseProjectId] = useState('');
   const [baseVersionId, setBaseVersionId] = useState('');
   const [baseVersions, setBaseVersions] = useState([]);
@@ -14,21 +12,9 @@ export default function ProjectCreateModal({ open, onClose, onCreate, clients = 
   const apiEnabled = import.meta.env.VITE_API_ENABLED === 'true';
 
   useEffect(() => {
-    if (!open) return;
-    setBaseProjectId('');
-    setBaseVersionId('');
-    setBaseVersions([]);
-    setVersionsLoading(false);
-  }, [open]);
+    if (!baseProjectId || !apiEnabled) return;
 
-  useEffect(() => {
-    if (!baseProjectId || !apiEnabled) {
-      setBaseVersions([]);
-      setBaseVersionId('');
-      return;
-    }
     let cancelled = false;
-    setVersionsLoading(true);
     apiFetch(`/api/projects/${baseProjectId}/versions`, {}, authToken)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -53,12 +39,20 @@ export default function ProjectCreateModal({ open, onClose, onCreate, clients = 
   const versionOptions = useMemo(() => (
     [
       { value: '', label: 'Diseño actual' },
-      ...baseVersions.map((version) => ({
+      ...(baseProjectId && apiEnabled ? baseVersions : []).map((version) => ({
         value: version.id,
         label: version.name || version.id.slice(0, 8),
       })),
     ]
-  ), [baseVersions]);
+  ), [baseProjectId, apiEnabled, baseVersions]);
+
+  const handleClose = () => {
+    setBaseProjectId('');
+    setBaseVersionId('');
+    setBaseVersions([]);
+    setVersionsLoading(false);
+    onClose?.();
+  };
 
   const handleCreate = async (payload) => {
     const created = await onCreate?.({
@@ -66,16 +60,18 @@ export default function ProjectCreateModal({ open, onClose, onCreate, clients = 
       baseProjectId: baseProjectId || null,
       baseVersionId: baseVersionId || null,
     });
-    if (created) onClose?.();
+    if (created) handleClose();
     return created;
   };
 
+  if (!open) return null;
+
   return (
-    <div className="pc-modal-backdrop" onClick={onClose}>
+    <div className="pc-modal-backdrop" onClick={handleClose}>
       <div className="pc-modal" onClick={(e) => e.stopPropagation()}>
         <div className="pc-modal__header">
           <h3>Nuevo proyecto</h3>
-          <button className="pc-modal__close" type="button" onClick={onClose}>Cerrar</button>
+          <button className="pc-modal__close" type="button" onClick={handleClose}>Cerrar</button>
         </div>
         <div className="pc-modal__body">
           <div className="pc-modal__base">
@@ -88,6 +84,7 @@ export default function ProjectCreateModal({ open, onClose, onCreate, clients = 
                 onChange={(value) => {
                   setBaseProjectId(value);
                   setBaseVersionId('');
+                  setVersionsLoading(Boolean(value && apiEnabled));
                 }}
                 disabled={!projectOptions.length}
               />

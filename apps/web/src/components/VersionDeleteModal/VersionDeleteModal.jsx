@@ -1,4 +1,5 @@
 import './VersionDeleteModal.css';
+import DeleteIconButton from '../ui/DeleteIconButton.jsx';
 
 export default function VersionDeleteModal({ open, project, version, onCancel, onConfirm }) {
   if (!open || !project || !version) return null;
@@ -15,9 +16,10 @@ export default function VersionDeleteModal({ open, project, version, onCancel, o
           <button className="vd-cancel" type="button" onClick={onCancel}>
             Cancelar
           </button>
-          <button className="vd-confirm" type="button" onClick={() => onConfirm(project, version)}>
-            Sí, eliminar
-          </button>
+          <DeleteIconButton
+            ariaLabel="Confirmar eliminación de versión"
+            onClick={() => onConfirm(project, version)}
+          />
         </div>
       </div>
     </div>

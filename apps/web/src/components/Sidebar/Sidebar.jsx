@@ -12,6 +12,8 @@ function Sidebar({
   onSectionToggle,
   onSubsectionChange,
   user,
+  theme,
+  onToggleTheme,
   onLogout,
 }) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -97,8 +99,15 @@ function Sidebar({
           </div>
           {isUserMenuOpen && (
             <div className="sidebar__user-menu">
-              <button className="sidebar__user-menu-item" type="button">
-                Configuración
+              <button
+                className="sidebar__user-menu-item"
+                type="button"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  onToggleTheme?.();
+                }}
+              >
+                {theme === "dark" ? "Modo claro" : "Modo oscuro"}
               </button>
               <button
                 className="sidebar__user-menu-item danger"

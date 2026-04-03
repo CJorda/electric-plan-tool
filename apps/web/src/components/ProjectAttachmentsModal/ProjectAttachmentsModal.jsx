@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import DeleteIconButton from "../ui/DeleteIconButton.jsx";
 import "./ProjectAttachmentsModal.css";
 
 export default function ProjectAttachmentsModal({
@@ -68,13 +69,10 @@ export default function ProjectAttachmentsModal({
                     >
                       Ver
                     </button>
-                    <button
-                      type="button"
-                      className="pa-modal__delete"
+                    <DeleteIconButton
+                      ariaLabel="Eliminar adjunto"
                       onClick={() => onDeleteAttachment?.(attachment.id)}
-                    >
-                      Eliminar
-                    </button>
+                    />
                   </div>
                 </li>
               ))}

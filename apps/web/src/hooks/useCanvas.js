@@ -1,5 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 
+const MIN_BOX_WIDTH = 60;
+const MIN_BOX_HEIGHT = 50;
+const MIN_DRAW_THRESHOLD = 12;
+
 const createId = () => {
   if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -7,7 +11,7 @@ const createId = () => {
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOpenDeviceModal, selectedCableType }) {
+function useCanvas({ activeMode, onOpenBoxModal, onOpenCableModal, onOpenDeviceModal, selectedCableType }) {
   const svgRef = useRef(null);
   const [boxes, setBoxes] = useState([]);
   const [cables, setCables] = useState([]);
@@ -15,9 +19,11 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
   const [selectedBoxId, setSelectedBoxId] = useState(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState(null);
   const [draggingBox, setDraggingBox] = useState(null);
+  const [resizingBox, setResizingBox] = useState(null);
   const [draggingDevice, setDraggingDevice] = useState(null);
   const [draftCable, setDraftCable] = useState(null);
   const [draftCursor, setDraftCursor] = useState(null);
+  const [draftBox, setDraftBox] = useState(null);
   const [tooltip, setTooltip] = useState(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -33,22 +39,17 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
     return { x, y };
   };
 
-  const defaultColorMap = {
-    ac220: "#ef4444",
-    modbus: "#f97316",
-    analog: "#f59e0b",
-    eth: "#0ea5e9",
-    fiber: "#8b5cf6",
-    dc24: "#22c55e",
-  };
+  const addBoxFromRect = (rect) => {
+    if (rect.width < MIN_DRAW_THRESHOLD || rect.height < MIN_DRAW_THRESHOLD) {
+      return;
+    }
 
-  const addBoxAtPoint = (point) => {
     const newBox = {
       id: createId(),
-      x: point.x - boxSize.width / 2,
-      y: point.y - boxSize.height / 2,
-      width: boxSize.width,
-      height: boxSize.height,
+      x: rect.x,
+      y: rect.y,
+      width: Math.max(MIN_BOX_WIDTH, rect.width),
+      height: Math.max(MIN_BOX_HEIGHT, rect.height),
       name: `Cuadro ${boxes.length + 1}`,
       zone: "",
       components: [],
@@ -56,7 +57,6 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
     setBoxes((prev) => [...prev, newBox]);
     setSelectedBoxId(newBox.id);
     setSelectedDeviceId(null);
-    onOpenBoxModal();
   };
 
   const addDeviceAtPoint = (point) => {
@@ -82,10 +82,8 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
   };
 
   const handleCanvasClick = (event) => {
-    if (isPanning || draggingBox) return;
+    if (isPanning || draggingBox || resizingBox) return;
     if (activeMode === "addBox") {
-      const point = getCanvasPoint(event);
-      addBoxAtPoint(point);
       return;
     }
     if (activeMode === "addDevice") {
@@ -120,12 +118,58 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
   };
 
   const handlePointerDown = (event) => {
+    if (activeMode === "addBox" && !event.ctrlKey) {
+      const point = getCanvasPoint(event);
+      setDraftBox({
+        originX: point.x,
+        originY: point.y,
+        x: point.x,
+        y: point.y,
+        width: 0,
+        height: 0,
+      });
+      setSelectedDeviceId(null);
+      return;
+    }
+
     if (!event.ctrlKey) return;
     setIsPanning(true);
     setPanStart({ x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y });
   };
 
   const handlePointerMove = (event) => {
+    if (draftBox) {
+      const point = getCanvasPoint(event);
+      const x = Math.min(draftBox.originX, point.x);
+      const y = Math.min(draftBox.originY, point.y);
+      const width = Math.abs(point.x - draftBox.originX);
+      const height = Math.abs(point.y - draftBox.originY);
+      setDraftBox((prev) => ({
+        ...prev,
+        x,
+        y,
+        width,
+        height,
+      }));
+      return;
+    }
+
+    if (resizingBox) {
+      const point = getCanvasPoint(event);
+      setBoxes((prev) =>
+        prev.map((box) =>
+          box.id === resizingBox.id
+            ? {
+                ...box,
+                width: Math.max(MIN_BOX_WIDTH, point.x - box.x),
+                height: Math.max(MIN_BOX_HEIGHT, point.y - box.y),
+              }
+            : box
+        )
+      );
+      return;
+    }
+
     if (isPanning && panStart) {
       setPan({
         x: panStart.panX + (event.clientX - panStart.x),
@@ -168,9 +212,15 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
   };
 
   const handlePointerUp = () => {
+    if (draftBox) {
+      addBoxFromRect(draftBox);
+      setDraftBox(null);
+    }
+
     setIsPanning(false);
     setPanStart(null);
     setDraggingBox(null);
+    setResizingBox(null);
     setDraggingDevice(null);
   };
 
@@ -190,7 +240,7 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
           length: 0,
           totalPrice: 0,
           autoCalculated: true,
-          color: (selectedCableType && (selectedCableType.color || defaultColorMap[selectedCableType.id])) || "#22c55e",
+          color: selectedCableType?.color || "#22c55e",
         });
       } else if (draftCable.fromBoxId !== box.id) {
         const completed = {
@@ -198,7 +248,7 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
           id: createId(),
           toBoxId: box.id,
           model: draftCable.model || selectedCableType?.label || "",
-          color: draftCable.color || ((selectedCableType && (selectedCableType.color || defaultColorMap[selectedCableType.id])) || "#22c55e"),
+          color: draftCable.color || selectedCableType?.color || "#22c55e",
         };
         setCables((prev) => [...prev, completed]);
         setDraftCable(null);
@@ -230,6 +280,14 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
       offsetX: point.x - device.x,
       offsetY: point.y - device.y,
     });
+  };
+
+  const handleBoxResizePointerDown = (event, box) => {
+    event.stopPropagation();
+    if (activeMode !== "select") return;
+    setSelectedBoxId(box.id);
+    setSelectedDeviceId(null);
+    setResizingBox({ id: box.id });
   };
 
   const handleBoxDoubleClick = (event, box) => {
@@ -376,6 +434,7 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
     zoom,
     backgroundImage,
     tooltip,
+    draftBox,
     draftCable,
     draftPolyline,
     handleCanvasClick,
@@ -385,6 +444,7 @@ function useCanvas({ activeMode, boxSize, onOpenBoxModal, onOpenCableModal, onOp
     handlePointerUp,
     handleBoxPointerDown,
     handleDevicePointerDown,
+    handleBoxResizePointerDown,
     handleBoxDoubleClick,
     handleDeviceDoubleClick,
     handleBoxPointerMove,

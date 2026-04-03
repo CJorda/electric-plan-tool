@@ -8,6 +8,7 @@ import { authRouter } from "./routes/auth.js";
 import { projectsRouter } from "./routes/projects.js";
 import { catalogRouter } from "./routes/catalog.js";
 import { reportsRouter } from "./routes/reports.js";
+import { operationsRouter } from "./routes/operations.js";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import { initDatabase } from "./db.js";
@@ -16,6 +17,9 @@ import { corsOptions, getSwaggerServerUrl } from "./config/cors.js";
 
 const app = express();
 const port = Number(env.PORT || 4001);
+const host = env.API_HOST || "0.0.0.0";
+let dbReady = false;
+let keepAliveTimer = null;
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -37,7 +41,19 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString() });
+  res.status(dbReady ? 200 : 503).json({
+    status: dbReady ? "ok" : "starting",
+    dbReady,
+    time: new Date().toISOString(),
+  });
+});
+
+app.use((req, res, next) => {
+  if (req.path === "/api/health") return next();
+  if (!dbReady) {
+    return res.status(503).json({ error: "API iniciando. Base de datos no disponible todavía." });
+  }
+  return next();
 });
 
 // Swagger / OpenAPI setup (mounted only outside production)
@@ -64,6 +80,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api/catalog", catalogRouter);
 app.use("/api/reports", reportsRouter);
+app.use("/api/operations", operationsRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: "Ruta no encontrada" });
@@ -74,13 +91,32 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Error interno del servidor" });
 });
 
+const server = app.listen(port, host, () => {
+  console.log(`API escuchando en http://${host}:${port}`);
+  // Keep process alive in shells that may terminate on idle.
+  if (!keepAliveTimer) {
+    keepAliveTimer = setInterval(() => {}, 60000);
+  }
+});
+
+server.on("error", (error) => {
+  console.error("Server error:", error);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
+});
+
+process.on("unhandledRejection", (error) => {
+  console.error("Unhandled rejection:", error);
+});
+
 initDatabase()
   .then(() => {
-    app.listen(port, () => {
-      console.log(`API escuchando en puerto ${port}`);
-    });
+    dbReady = true;
+    console.log("Base de datos inicializada correctamente");
   })
   .catch((error) => {
+    dbReady = false;
     console.error("Error inicializando base de datos:", error);
-    process.exit(1);
   });

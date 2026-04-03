@@ -10,7 +10,7 @@ function Toolbar({
   onZoom,
   onReset,
   onOpenImage,
-  onOpenSize,
+  onOpenCableTypes,
   totals,
 }) {
   if (!visible) return null;
@@ -22,10 +22,12 @@ function Toolbar({
           <Image size={18} />
           Imagen fondo
         </button>
-        <button className="toolbar__button" type="button" onClick={onOpenSize}>
-          <SlidersHorizontal size={18} />
-          Tamaño cuadros
-        </button>
+        {onOpenCableTypes && (
+          <button className="toolbar__button" type="button" onClick={onOpenCableTypes}>
+            <SlidersHorizontal size={18} />
+            Tipos cable
+          </button>
+        )}
       </div>
 
       <div className="toolbar__group">
@@ -61,9 +63,6 @@ function Toolbar({
       <div className="toolbar__budget">
         <div className="toolbar__budget-label">Presupuesto total</div>
         <div className="toolbar__budget-value">€{totals.total.toFixed(2)}</div>
-        <div className="toolbar__budget-detail">
-          Cuadros: €{totals.boxes.toFixed(2)} · Cables: €{totals.cables.toFixed(2)}
-        </div>
       </div>
     </header>
   );

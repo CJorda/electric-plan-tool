@@ -1,0 +1,29 @@
+.ui-delete-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 56%, transparent);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ui-delete-btn:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.ui-delete-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 34%, transparent);
+}
+
+.ui-delete-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

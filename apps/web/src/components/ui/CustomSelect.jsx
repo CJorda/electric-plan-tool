@@ -20,12 +20,6 @@ function CustomSelect({
   }, [options, placeholder, value]);
 
   useEffect(() => {
-    if (open) {
-      setOpen(false);
-    }
-  }, [value]);
-
-  useEffect(() => {
     const handleOutside = (event) => {
       if (!rootRef.current) return;
       if (!rootRef.current.contains(event.target)) {

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import ProjectStatusBadge from '../ProjectStatus/ProjectStatusBadge.jsx';
+import ProjectCardInfoPanel from './ProjectCardInfoPanel.jsx';
+import ProjectCardVersionsPanel from './ProjectCardVersionsPanel.jsx';
 
 const calcVersionTotal = (version) => {
   const design = version?.snapshot?.design || version?.snapshot || {};
@@ -37,8 +38,6 @@ export default function ProjectCard({
   versionsLoading = false,
   onToggleVersions,
   onSelectVersion,
-  statusOptions,
-  onStatusChange,
   hideStatusControls = false,
 }) {
   const sortedVersions = useMemo(
@@ -61,176 +60,39 @@ export default function ProjectCard({
   };
   return (
     <div className="projects__card">
-      <div className="projects__info">
-        <div className="projects__title-row">
-          {editingProject ? (
-            <div className="projects__project-edit">
-              <input
-                value={projectName}
-                onChange={(event) => setProjectName(event.target.value)}
-                placeholder="Nombre del proyecto"
-              />
-              <div className="projects__project-edit-actions">
-                <button
-                  type="button"
-                  className="projects__version-rename"
-                  onClick={() => {
-                    if (!projectName.trim()) return;
-                    onRenameProject?.(project, projectName.trim());
-                    setEditingProject(false);
-                  }}
-                >
-                  Guardar
-                </button>
-                <button
-                  type="button"
-                  className="projects__version-cancel"
-                  onClick={() => {
-                    setProjectName(project.name || '');
-                    setEditingProject(false);
-                  }}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          ) : (
-            <strong className="projects__name">{project.name}</strong>
-          )}
-          {!hideStatusControls && <ProjectStatusBadge status={project.status || 'draft'} />}
-        </div>
-        <div className="projects__meta">
-          <span>{project.type}</span>
-          {project.created_at && <span>· Creado: {new Date(project.created_at).toLocaleDateString()}</span>}
-          {project.client && <span>· Cliente: {project.client}</span>}
-          {project.reference && <span>· Ref: {project.reference}</span>}
-          {project.address && <span>· Dirección: {project.address}</span>}
-          {project.versions_count !== undefined && <span>· Revisiones: {project.versions_count}</span>}
-          <button
-            type="button"
-            className="projects__versions-toggle"
-            onClick={() => onToggleVersions?.(project)}
-          >
-            Versiones ({project.versions_count ?? versions.length})
-          </button>
-          {!editingProject && (
-            <button
-              type="button"
-              className="projects__versions-toggle"
-              onClick={() => setEditingProject(true)}
-            >
-              Renombrar
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="projects__summary">
-        <span className="projects__badge" aria-label="Total estimado">
-          <span className="projects__badge-price">€{Number(total || 0).toFixed(2)}</span>
-          <span className="projects__badge-label">Total estimado</span>
-        </span>
-      </div>
-
-      <div className="projects__actions">
-        <button
-          className="projects__action"
-          type="button"
-          onClick={() => onAttachments?.(project)}
-        >
-          Adjuntos ({attachmentsCount})
-        </button>
-        <button className="projects__danger projects__danger--icon" type="button" onClick={() => onDelete(project)} aria-label="Eliminar">
-          ×
-        </button>
-      </div>
+      <ProjectCardInfoPanel
+        project={project}
+        total={total}
+        hideStatusControls={hideStatusControls}
+        editingProject={editingProject}
+        projectName={projectName}
+        setProjectName={setProjectName}
+        setEditingProject={setEditingProject}
+        onRenameProject={onRenameProject}
+        onToggleVersions={() => onToggleVersions?.(project)}
+        versionsCount={project.versions_count ?? versions.length}
+        attachmentsCount={attachmentsCount}
+        onAttachments={onAttachments}
+        onDelete={onDelete}
+      />
 
       {versionsOpen && (
         <div className="projects__versions">
-          {versionsLoading ? (
-            <div className="projects__versions-empty">Cargando versiones...</div>
-          ) : sortedVersions.length === 0 ? (
-            <div className="projects__versions-empty">Aún no hay versiones.</div>
-          ) : (
-            <div className="projects__versions-list">
-              {sortedVersions.map((version) => (
-                <div key={version.id} className="projects__version-row">
-                  <div>
-                    {editingVersionId === version.id ? (
-                      <div className="projects__version-edit">
-                        <input
-                          value={editingName}
-                          onChange={(event) => setEditingName(event.target.value)}
-                          placeholder="Nombre de la versión"
-                        />
-                        <div className="projects__version-edit-actions">
-                          <button
-                            type="button"
-                            className="projects__version-rename"
-                            onClick={() => {
-                              if (!editingName.trim()) return;
-                              onRenameVersion?.(project, version, editingName.trim());
-                              cancelRename();
-                            }}
-                          >
-                            Guardar
-                          </button>
-                          <button
-                            type="button"
-                            className="projects__version-cancel"
-                            onClick={cancelRename}
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <strong>{version.name || 'Versión'}</strong>
-                    )}
-                    <div className="projects__version-meta">
-                      {new Date(version.createdAt).toLocaleString()}
-                      {version.author ? ` · ${version.author}` : ''}
-                      {version.status ? ` · ${version.status}` : ''}
-                      {version.locked ? ' · bloqueada' : ''}
-                    </div>
-                    {version.notes && <div className="projects__version-notes">{version.notes}</div>}
-                  </div>
-                  <div className="projects__version-total">Total: €{calcVersionTotal(version).toFixed(2)}</div>
-                  <div className="projects__version-actions">
-                    <button
-                      type="button"
-                      className="projects__version-select"
-                      disabled={version.locked}
-                      onClick={() => onSelectVersion?.(project, version)}
-                    >
-                      Abrir editor
-                    </button>
-                    <button
-                      type="button"
-                      className="projects__version-rename"
-                      onClick={() => startRename(version)}
-                    >
-                      Renombrar
-                    </button>
-                    <button
-                      type="button"
-                      className="projects__version-duplicate"
-                      onClick={() => onDuplicateVersion?.(project, version)}
-                    >
-                      Duplicar
-                    </button>
-                    <button
-                      type="button"
-                      className="projects__version-delete"
-                      onClick={() => onRequestDeleteVersion?.(project, version)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <ProjectCardVersionsPanel
+            project={project}
+            versionsLoading={versionsLoading}
+            sortedVersions={sortedVersions}
+            editingVersionId={editingVersionId}
+            editingName={editingName}
+            setEditingName={setEditingName}
+            onStartRename={startRename}
+            onCancelRename={cancelRename}
+            onRenameVersion={onRenameVersion}
+            onSelectVersion={onSelectVersion}
+            onDuplicateVersion={onDuplicateVersion}
+            onRequestDeleteVersion={onRequestDeleteVersion}
+            calcVersionTotal={calcVersionTotal}
+          />
         </div>
       )}
     </div>

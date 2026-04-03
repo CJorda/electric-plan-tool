@@ -1,16 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import './ProjectsPage.css';
-import ProjectList from '../../components/ProjectList/ProjectList.jsx';
 import useProjects from '../../hooks/useProjects.js';
 import ProjectDeleteModal from '../../components/ProjectDeleteModal/ProjectDeleteModal.jsx';
 import ProjectCreateModal from '../../components/ProjectCreateModal/ProjectCreateModal.jsx';
 import ProjectAttachmentsModal from '../../components/ProjectAttachmentsModal/ProjectAttachmentsModal.jsx';
 import VersionDeleteModal from '../../components/VersionDeleteModal/VersionDeleteModal.jsx';
 import { apiFetch } from '../../lib/api.js';
+import { toastError, toastInfo, toastSuccess } from '../../lib/toast.js';
+import ProjectsPageHeader from './ProjectsPageHeader.jsx';
+import ProjectsPageContent from './ProjectsPageContent.jsx';
+import { buildFilteredProjects, downloadProjectsCsv, formatBytes, readFileAsDataUrl } from './projectsPageUtils.js';
+import { createProjectRecord } from './projectsPageCreate.js';
+import { STATUS_OPTIONS } from '../../constants/projectStatus';
 
-function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onProjectCreated, hideStatusControls = false, authToken = '', clients = [] }) {
+function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onProjectCreated, hideStatusControls = false, authToken = '', clients = [] }) {
   const apiEnabled = import.meta.env.VITE_API_ENABLED === 'true';
-  const [projectTotals, setProjectTotals] = useState(() => {
+  const [projectTotals] = useState(() => {
     try {
       const s = localStorage.getItem('projectTotals');
       return s ? JSON.parse(s) : {};
@@ -19,7 +24,7 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
     }
   });
 
-  const { projects, setProjects, isLoading, error, reload } = useProjects({ apiEnabled, authToken });
+  const { projects, setProjects, isLoading, error } = useProjects({ apiEnabled, authToken });
 
   const handleOpen = (projectId) => onOpenDesigner(projectId, projects.find((p) => p.id === projectId)?.status);
 
@@ -31,23 +36,23 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
   const [versionsByProject, setVersionsByProject] = useState({});
   const [versionsOpenByProject, setVersionsOpenByProject] = useState({});
   const [versionsLoadingByProject, setVersionsLoadingByProject] = useState({});
+  const [quickFilter, setQuickFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
 
-  const formatBytes = (value) => {
-    const bytes = Number(value) || 0;
-    if (bytes < 1024) return `${bytes} B`;
-    const kb = bytes / 1024;
-    if (kb < 1024) return `${kb.toFixed(1)} KB`;
-    const mb = kb / 1024;
-    return `${mb.toFixed(1)} MB`;
-  };
-
-  const readFileAsDataUrl = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+  const filteredProjects = useMemo(() => {
+    return buildFilteredProjects({
+      projects,
+      searchQuery,
+      attachmentsByProject,
+      projectTotals,
+      quickFilter,
+      statusFilter,
     });
+  }, [projects, searchQuery, attachmentsByProject, projectTotals, quickFilter, statusFilter]);
+
+  const exportProjectsCsv = () => {
+    downloadProjectsCsv({ filteredProjects, projectTotals });
+  };
 
   const handleDelete = (project) => {
     // open confirmation modal
@@ -66,7 +71,7 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
       setVersionsByProject((prev) => ({ ...prev, [project.id]: data.versions || [] }));
     } catch (error) {
       console.error('Failed to load versions', error);
-      alert('No se pudieron cargar las versiones.');
+      toastError('No se pudieron cargar las versiones.');
     } finally {
       setVersionsLoadingByProject((prev) => ({ ...prev, [project.id]: false }));
     }
@@ -127,7 +132,7 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
       );
     } catch (error) {
       console.error('Failed to duplicate version', error);
-      alert('No se pudo duplicar la versión.');
+      toastError('No se pudo duplicar la versión.');
     }
   };
 
@@ -158,7 +163,7 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
       );
     } catch (error) {
       console.error('Failed to delete version', error);
-      alert('No se pudo eliminar la versión.');
+      toastError('No se pudo eliminar la versión.');
     }
   };
 
@@ -198,7 +203,7 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
       }));
     } catch (error) {
       console.error('Failed to rename version', error);
-      alert('No se pudo renombrar la versión.');
+      toastError('No se pudo renombrar la versión.');
     }
   };
 
@@ -228,7 +233,7 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
       setProjects((prev) => prev.map((item) => (item.id === project.id ? { ...item, name: updated.name } : item)));
     } catch (error) {
       console.error('Failed to rename project', error);
-      alert('No se pudo renombrar el proyecto.');
+      toastError('No se pudo renombrar el proyecto.');
     }
   };
 
@@ -247,7 +252,7 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
       setAttachmentsByProject((prev) => ({ ...prev, [project.id]: items }));
     } catch (error) {
       console.error('Failed to load attachments', error);
-      alert('No se pudieron cargar los adjuntos.');
+      toastError('No se pudieron cargar los adjuntos.');
     }
   };
 
@@ -256,7 +261,7 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
     const maxSize = 5 * 1024 * 1024;
     const allowed = files.filter((file) => file.size <= maxSize);
     if (allowed.length !== files.length) {
-      alert('Algunos archivos superan 5MB y fueron omitidos.');
+      toastInfo('Algunos archivos superan 5MB y fueron omitidos.');
     }
     if (!apiEnabled) return;
 
@@ -291,9 +296,10 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
           [attachmentsProject.id]: [...created, ...current],
         };
       });
+      toastSuccess('Adjuntos subidos correctamente.');
     } catch (error) {
       console.error('Failed to upload attachments', error);
-      alert('No se pudieron subir los adjuntos.');
+      toastError('No se pudieron subir los adjuntos.');
     }
   };
 
@@ -317,7 +323,7 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
       })
       .catch((error) => {
         console.error('Failed to delete attachment', error);
-        alert('No se pudo eliminar el adjunto.');
+        toastError('No se pudo eliminar el adjunto.');
       });
   };
 
@@ -337,7 +343,7 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
       console.error('Failed to open attachment', error);
-      alert('No se pudo abrir el adjunto.');
+      toastError('No se pudo abrir el adjunto.');
     }
   };
 
@@ -356,7 +362,7 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
         })
         .catch((err) => {
           console.error('Failed to delete project', err);
-          alert('No se pudo eliminar el proyecto en el servidor. Revirtiendo.');
+          toastError('No se pudo eliminar el proyecto en el servidor. Revirtiendo.');
           setProjects(prevProjects);
         });
     }
@@ -382,210 +388,74 @@ function ProjectsPage({ isProjectsSection, activeSubsection, onOpenDesigner, onP
         // revert optimistic change
         setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)));
         console.error('Failed to update project status', err);
-        alert('No se pudo actualizar el estado en el servidor. Revirtiendo.');
+        toastError('No se pudo actualizar el estado en el servidor. Revirtiendo.');
       }
     }
   };
 
   const handleCreateProject = async (payload) => {
-    const baseProjectId = payload?.baseProjectId || null;
-    const baseVersionId = payload?.baseVersionId || null;
-    if (apiEnabled) {
-      try {
-        const cleanedPayload = { ...payload };
-        delete cleanedPayload.baseProjectId;
-        delete cleanedPayload.baseVersionId;
-        const res = await apiFetch('/api/projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cleanedPayload),
-        }, authToken);
-        if (!res.ok) {
-          let errBody = null;
-          try {
-            errBody = await res.json();
-          } catch (e) {
-            // ignore
-          }
-          const msg = errBody?.message || errBody?.error || `HTTP ${res.status}`;
-          throw new Error(msg);
-        }
-        const created = await res.json();
-        const readBlobAsDataUrl = (blob) =>
-          new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
+    try {
+      const { mode, createdProject, createdVersion } = await createProjectRecord({
+        payload,
+        apiEnabled,
+        authToken,
+      });
 
-        let initialDesign = { boxes: [], cables: [], devices: [] };
-        let baseVersionMeta = null;
-
-        if (baseProjectId) {
-          const [designRes, versionsRes, attachmentsRes] = await Promise.all([
-            apiFetch(`/api/projects/${baseProjectId}/design`, {}, authToken),
-            apiFetch(`/api/projects/${baseProjectId}/versions`, {}, authToken),
-            apiFetch(`/api/projects/${baseProjectId}/attachments`, {}, authToken),
-          ]);
-
-          const designData = designRes.ok ? await designRes.json() : { design: null };
-          const versionsData = versionsRes.ok ? await versionsRes.json() : { versions: [] };
-          const attachmentsData = attachmentsRes.ok ? await attachmentsRes.json() : { items: [] };
-
-          if (baseVersionId && Array.isArray(versionsData?.versions)) {
-            baseVersionMeta = versionsData.versions.find((version) => version.id === baseVersionId) || null;
-            if (baseVersionMeta?.snapshot?.design) {
-              initialDesign = baseVersionMeta.snapshot.design;
-            }
-          }
-
-          if (!baseVersionMeta && designData?.design) {
-            initialDesign = designData.design;
-          }
-
-          if (Array.isArray(attachmentsData?.items) && attachmentsData.items.length > 0) {
-            for (const attachment of attachmentsData.items) {
-              const fileRes = await apiFetch(
-                `/api/projects/${baseProjectId}/attachments/${attachment.id}`,
-                {},
-                authToken
-              );
-              if (!fileRes.ok) continue;
-              const blob = await fileRes.blob();
-              const dataUrl = await readBlobAsDataUrl(blob);
-              await apiFetch(
-                `/api/projects/${created.id}/attachments`,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    items: [{
-                      name: attachment.name,
-                      type: attachment.mime_type || attachment.type,
-                      size: attachment.size || blob.size,
-                      dataUrl,
-                    }],
-                  }),
-                },
-                authToken
-              );
-            }
-          }
-        }
-
-        if (initialDesign) {
-          await apiFetch(`/api/projects/${created.id}/design`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ design: initialDesign }),
-          }, authToken);
-        }
-
-        const versionRes = await apiFetch(`/api/projects/${created.id}/versions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            snapshot: { design: initialDesign, createdAt: new Date().toISOString() },
-            name: baseVersionMeta?.name || 'Versión 1',
-            notes: baseVersionMeta?.notes || null,
-            status: baseVersionMeta?.status || 'draft',
-            locked: false,
-            author: baseVersionMeta?.author || null,
-          }),
-        }, authToken);
-
-        const createdVersion = versionRes.ok ? await versionRes.json() : null;
-        const createdWithVersions = { ...created, versions_count: 1 };
+      if (mode === 'api') {
         setVersionsByProject((prev) => ({
           ...prev,
-          [created.id]: createdVersion ? [createdVersion] : [],
+          [createdProject.id]: createdVersion ? [createdVersion] : [],
         }));
-        setVersionsOpenByProject((prev) => ({ ...prev, [created.id]: true }));
-
-        setProjects((prev) => [createdWithVersions, ...prev]);
-        onProjectCreated?.(createdWithVersions);
-        setIsCreateOpen(false);
-        return createdWithVersions;
-      } catch (err) {
-        console.error('Failed to create project', err);
-        alert('No se pudo crear el proyecto en el servidor. ' + (err?.message || ''));
-        throw err;
+        setVersionsOpenByProject((prev) => ({ ...prev, [createdProject.id]: true }));
       }
-    }
 
-    // local fallback
-    const id = `local-${Date.now()}`;
-    const created = { id, name: payload.name || 'Proyecto local', status: payload.status || 'draft', createdAt: new Date().toISOString(), design: payload.design || null };
-    setProjects((prev) => [created, ...prev]);
-    onProjectCreated?.(created);
-    setIsCreateOpen(false);
-    return created;
+      setProjects((prev) => [createdProject, ...prev]);
+      onProjectCreated?.(createdProject);
+      setIsCreateOpen(false);
+      toastSuccess(mode === 'api' ? 'Proyecto creado correctamente.' : 'Proyecto creado en modo local.');
+      return createdProject;
+    } catch (err) {
+      console.error('Failed to create project', err);
+      toastError('No se pudo crear el proyecto en el servidor. ' + (err?.message || ''));
+      throw err;
+    }
   };
 
   if (!isProjectsSection) return null;
 
   return (
     <section className="projects">
-      <div className="projects__header">
-        <div>
-          <h2>Proyectos</h2>
-          <p>Organiza y gestiona tus proyectos eléctricos.</p>
-        </div>
-        <div className="projects__header-actions">
-          <button
-            className="projects__action"
-            type="button"
-            onClick={() => setIsCreateOpen(true)}
-          >
-            Nuevo proyecto
-          </button>
-        </div>
-      </div>
+      <ProjectsPageHeader
+        quickFilter={quickFilter}
+        onQuickFilterChange={setQuickFilter}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        statusOptions={STATUS_OPTIONS}
+        onOpenCreate={() => setIsCreateOpen(true)}
+        onExportCsv={exportProjectsCsv}
+      />
 
-      <div className="projects__placeholder">
-        <h3>Listado de proyectos</h3>
-        <p>Aquí aparecerán los proyectos guardados y el historial reciente.</p>
-        {error && <p className="projects__status projects__status--error">{error}</p>}
-        {isLoading ? (
-          <div className="projects__skeleton">
-            {[1, 2, 3].map((item) => (
-              <div key={item} className="projects__skeleton-card">
-                <div className="projects__skeleton-title skeleton" />
-                <div className="projects__skeleton-meta">
-                  <span className="projects__skeleton-pill skeleton" />
-                  <span className="projects__skeleton-line skeleton" />
-                  <span className="projects__skeleton-line skeleton" />
-                </div>
-                <div className="projects__skeleton-actions">
-                  <span className="projects__skeleton-button skeleton" />
-                  <span className="projects__skeleton-button skeleton" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <ProjectList
-            projects={projects}
-            totals={projectTotals}
-            onOpen={handleOpen}
-            onDelete={handleDelete}
-            onAttachments={handleOpenAttachments}
-            onDuplicateVersion={handleDuplicateVersion}
-            onRequestDeleteVersion={handleRequestDeleteVersion}
-            onRenameVersion={handleRenameVersion}
-            onRenameProject={handleRenameProject}
-            attachmentsByProject={attachmentsByProject}
-            versionsByProject={versionsByProject}
-            versionsOpenByProject={versionsOpenByProject}
-            versionsLoadingByProject={versionsLoadingByProject}
-            onToggleVersions={handleToggleVersions}
-            onSelectVersion={handleSelectVersion}
-            onStatusChange={handleStatusChange}
-            hideStatusControls={hideStatusControls}
-          />
-        )}
-      </div>
+      <ProjectsPageContent
+        filteredProjects={filteredProjects}
+        error={error}
+        isLoading={isLoading}
+        projectTotals={projectTotals}
+        onOpen={handleOpen}
+        onDelete={handleDelete}
+        onAttachments={handleOpenAttachments}
+        onDuplicateVersion={handleDuplicateVersion}
+        onRequestDeleteVersion={handleRequestDeleteVersion}
+        onRenameVersion={handleRenameVersion}
+        onRenameProject={handleRenameProject}
+        attachmentsByProject={attachmentsByProject}
+        versionsByProject={versionsByProject}
+        versionsOpenByProject={versionsOpenByProject}
+        versionsLoadingByProject={versionsLoadingByProject}
+        onToggleVersions={handleToggleVersions}
+        onSelectVersion={handleSelectVersion}
+        onStatusChange={handleStatusChange}
+        hideStatusControls={hideStatusControls}
+      />
 
       <ProjectDeleteModal
         open={Boolean(confirmProject)}

@@ -1112,6 +1112,51 @@ catalogRouter.post("/margins", async (req, res) => {
   }
 });
 
+catalogRouter.put("/margins/:marginId", async (req, res) => {
+  const parsed = marginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Datos inválidos", details: parsed.error.format() });
+  }
+
+  const { providerId, categoryId, marginPercent } = parsed.data;
+
+  try {
+    await ensureCatalogTables();
+
+    const providerCheck = await query("SELECT id FROM providers WHERE id = $1", [providerId]);
+    if (providerCheck.rows.length === 0) {
+      return res.status(400).json({ error: "Proveedor no encontrado" });
+    }
+
+    const categoryCheck = await query("SELECT id FROM categories WHERE id = $1", [categoryId]);
+    if (categoryCheck.rows.length === 0) {
+      return res.status(400).json({ error: "Categoría no encontrada" });
+    }
+
+    const result = await query(
+      `UPDATE category_provider_margins
+       SET provider_id = $1,
+           category_id = $2,
+           margin_percent = $3,
+           updated_at = NOW()
+       WHERE id = $4
+       RETURNING id, provider_id, category_id, margin_percent`,
+      [providerId, categoryId, marginPercent, req.params.marginId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Margen no encontrado" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    if (error?.code === "23505") {
+      return res.status(409).json({ error: "Ya existe un margen para esa combinación" });
+    }
+    res.status(500).json({ error: "Error actualizando margen" });
+  }
+});
+
 catalogRouter.delete("/margins/:marginId", async (req, res) => {
   try {
     const result = await query("DELETE FROM category_provider_margins WHERE id = $1", [req.params.marginId]);

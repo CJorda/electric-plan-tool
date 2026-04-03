@@ -1,4 +1,5 @@
 import { useState } from "react";
+import DeleteIconButton from "../ui/DeleteIconButton.jsx";
 import "./ClientsSection.css";
 
 export default function ClientsSection({
@@ -114,13 +115,10 @@ export default function ClientsSection({
                 value={client.notes || ""}
                 onChange={(event) => onUpdateClient(client.id, { notes: event.target.value })}
               />
-              <button
-                type="button"
-                className="clients__delete"
+              <DeleteIconButton
+                ariaLabel="Eliminar cliente"
                 onClick={() => onDeleteClient(client.id)}
-              >
-                X
-              </button>
+              />
             </div>
           ))
         )}

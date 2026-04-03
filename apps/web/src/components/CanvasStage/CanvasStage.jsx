@@ -10,17 +10,17 @@ function CanvasStage({
   devices,
   selectedBoxId,
   selectedDeviceId,
+  draftBox,
   draftCable,
   draftPolyline,
   tooltip,
-  activeModeLabel,
-  helpMessage,
   onCanvasClick,
   onWheel,
   onPointerDown,
   onPointerMove,
   onPointerUp,
   onBoxPointerDown,
+  onBoxResizePointerDown,
   onDevicePointerDown,
   onDeviceDoubleClick,
   onBoxDoubleClick,
@@ -31,8 +31,6 @@ function CanvasStage({
   renderCablePoints,
   renderCableLabelPosition,
   renderBoxLabel,
-  onEditSelected,
-  onTogglePartsList,
 }) {
   return (
     <main className="canvas">
@@ -72,6 +70,20 @@ function CanvasStage({
               />
             )}
 
+            {draftBox && draftBox.width > 0 && draftBox.height > 0 && (
+              <rect
+                x={draftBox.x}
+                y={draftBox.y}
+                width={draftBox.width}
+                height={draftBox.height}
+                rx={8}
+                fill="rgba(30, 41, 59, 0.18)"
+                stroke="#38bdf8"
+                strokeWidth="2"
+                strokeDasharray="6 4"
+              />
+            )}
+
             {boxes.map((box) => (
               <g key={box.id}>
                 <rect
@@ -83,17 +95,36 @@ function CanvasStage({
                   fill={box.id === selectedBoxId ? "#1f2937" : "#111827"}
                   stroke={box.id === selectedBoxId ? "#94a3b8" : "#374151"}
                   strokeWidth="2"
+                  onClick={(event) => event.stopPropagation()}
                   onPointerDown={(event) => onBoxPointerDown(event, box)}
                   onDoubleClick={(event) => onBoxDoubleClick(event, box)}
                   onPointerMove={(event) => onBoxPointerMove(event, box)}
                   onPointerLeave={onBoxPointerLeave}
                 />
                 {renderBoxLabel(box)}
+                {box.id === selectedBoxId && (
+                  <rect
+                    className="canvas__box-resize-handle"
+                    x={box.x + box.width - 8}
+                    y={box.y + box.height - 8}
+                    width={16}
+                    height={16}
+                    rx={4}
+                    fill="#38bdf8"
+                    stroke="#0f172a"
+                    strokeWidth="2"
+                    onClick={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => onBoxResizePointerDown?.(event, box)}
+                  />
+                )}
               </g>
             ))}
 
             {devices.map((device) => (
-              <g key={device.id}>
+              <g
+                key={device.id}
+                className={`canvas__device${device.id === selectedDeviceId ? " is-selected" : ""}`}
+              >
                 <circle
                   cx={device.x}
                   cy={device.y}
@@ -101,15 +132,16 @@ function CanvasStage({
                   fill={device.id === selectedDeviceId ? "#1e293b" : "#0f172a"}
                   stroke={device.id === selectedDeviceId ? "#38bdf8" : "#64748b"}
                   strokeWidth="2"
+                  onClick={(event) => event.stopPropagation()}
                   onPointerDown={(event) => onDevicePointerDown?.(event, device)}
                   onDoubleClick={(event) => onDeviceDoubleClick?.(event, device)}
                 />
                 <circle cx={device.x} cy={device.y} r={5} fill="#38bdf8" />
                 <text
+                  className="canvas__device-label"
                   x={device.x}
                   y={device.y + 26}
                   textAnchor="middle"
-                  fill="#e2e8f0"
                   fontSize="11"
                 >
                   {device.name || "Cámara"}

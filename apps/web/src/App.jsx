@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Boxes, Camera, Link2, MousePointer, Home, FolderKanban, Package, Menu, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Home, FolderKanban, Package, Users, Briefcase } from "lucide-react";
 import Sidebar from "./components/Sidebar/Sidebar.jsx";
 import Toolbar from "./components/Toolbar/Toolbar.jsx";
 import CatalogPage from "./pages/CatalogPage/CatalogPage.jsx";
@@ -7,32 +7,20 @@ import DashboardPage from "./pages/DashboardPage/DashboardPage.jsx";
 import CanvasPage from "./pages/CanvasPage/CanvasPage.jsx";
 import ProjectsPage from "./pages/ProjectsPage/ProjectsPage.jsx";
 import ClientsPage from "./pages/ClientsPage/ClientsPage.jsx";
+import OperationsPage from "./pages/OperationsPage/OperationsPage.jsx";
 import LoginPage from "./pages/LoginPage/LoginPage.jsx";
 import { apiFetch } from "./lib/api.js";
-import BoxModal from "./components/modals/BoxModal/BoxModal.jsx";
-import CableModal from "./components/modals/CableModal/CableModal.jsx";
-import ImageModal from "./components/modals/ImageModal/ImageModal.jsx";
-import SizeModal from "./components/modals/SizeModal/SizeModal.jsx";
-import CameraModal from "./components/modals/CameraModal/CameraModal.jsx";
 import CableTypeModal from "./components/modals/CableTypeModal/CableTypeModal.jsx";
 import useCatalog from "./hooks/useCatalog.js";
 import useProjects from "./hooks/useProjects.js";
 import useCanvas from "./hooks/useCanvas.js";
 import useClients from "./hooks/useClients.js";
+import useAuthSession from "./hooks/useAuthSession.js";
+import AppBreadcrumb from "./components/AppShell/AppBreadcrumb.jsx";
+import AppGlobalModals from "./components/AppShell/AppGlobalModals.jsx";
+import { OPERATIONS_MODULES } from "./constants/operationsModules.js";
+import { DEFAULT_COMPONENT_FORM, MODES, STATUS_LABELS, STATUS_OPTIONS } from "./constants/appConstants.js";
 import "./App.css";
-
-const MODES = [
-  { id: "select", label: "Seleccionar", icon: MousePointer },
-  { id: "addBox", label: "Añadir cuadro", icon: Boxes },
-  { id: "addCable", label: "Dibujar cable", icon: Link2 },
-  { id: "addDevice", label: "Añadir cámara", icon: Camera },
-];
-
-const BOX_SIZES = {
-  small: { width: 80, height: 60, label: "Pequeño" },
-  medium: { width: 140, height: 100, label: "Mediano" },
-  large: { width: 200, height: 140, label: "Grande" },
-};
 
 const createId = () => {
   if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
@@ -41,72 +29,99 @@ const createId = () => {
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-const DEFAULT_COMPONENT_FORM = {
-  category: "",
+const DEFAULT_CABLE_COLOR = "#22c55e";
+
+const DEFAULT_CABLE_FORM = {
   model: "",
-  quantity: 1,
-  unitPrice: 0,
+  section: "",
+  length: 0,
+  totalPrice: 0,
 };
 
-const STATUS_OPTIONS = [
-  { value: "draft", label: "borrador" },
-  { value: "confirmed", label: "confirmado" },
-  { value: "published", label: "publicado" },
-  { value: "archived", label: "archivado" },
-];
+const normalizeCableType = (type) => {
+  const label = String(type?.label || "").trim();
+  return {
+    id: String(type?.id || createId()),
+    label,
+    subtitle: String(type?.subtitle || "").trim(),
+    hint: String(type?.hint || "").trim(),
+    color: String(type?.color || DEFAULT_CABLE_COLOR),
+  };
+};
 
-const STATUS_LABELS = {
-  draft: "borrador",
-  confirmed: "confirmado",
-  published: "publicado",
-  archived: "archivado",
-  local: "local",
+const normalizeCableTypes = (types) => {
+  if (!Array.isArray(types)) return [];
+  const seen = new Set();
+  return types
+    .map((type) => normalizeCableType(type))
+    .filter((type) => {
+      if (!type.id || seen.has(type.id)) {
+        return false;
+      }
+      seen.add(type.id);
+      return true;
+    });
+};
+
+const deriveCableTypesFromCables = (cables) => {
+  if (!Array.isArray(cables)) return [];
+  const map = new Map();
+  cables.forEach((cable) => {
+    const label = String(cable?.model || "").trim();
+    if (!label) return;
+    const color = String(cable?.color || DEFAULT_CABLE_COLOR);
+    const key = `${label.toLowerCase()}::${color.toLowerCase()}`;
+    if (map.has(key)) return;
+    map.set(key, {
+      id: createId(),
+      label,
+      subtitle: "",
+      hint: "",
+      color,
+    });
+  });
+  return [...map.values()];
 };
 
 function App() {
-  const [accessToken, setAccessToken] = useState(() => localStorage.getItem("accessToken") || "");
-  const [authUser, setAuthUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem("authUser");
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [loginError, setLoginError] = useState("");
-  const [loginLoading, setLoginLoading] = useState(false);
+  const {
+    accessToken,
+    authUser,
+    loginError,
+    loginLoading,
+    handleLogin,
+    logout,
+  } = useAuthSession();
 
-  const decodeJwt = (token) => {
-    if (!token) return null;
-    try {
-      const payload = token.split(".")[1];
-      if (!payload) return null;
-      const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-      return JSON.parse(json);
-    } catch {
-      return null;
+  const [theme, setTheme] = useState(() => {
+    const storedTheme = localStorage.getItem("theme");
+    if (storedTheme === "light" || storedTheme === "dark") {
+      return storedTheme;
     }
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      return "dark";
+    }
+    return "light";
+  });
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("data-dark-mode", theme === "dark" ? "true" : "false");
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
-  useEffect(() => {
-    if (!accessToken || authUser) return;
-    const payload = decodeJwt(accessToken);
-    if (!payload) return;
-    const derivedUser = {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role || "user",
-      name: payload.name,
-    };
-    localStorage.setItem("authUser", JSON.stringify(derivedUser));
-    setAuthUser(derivedUser);
-  }, [accessToken, authUser]);
   const [activeMode, setActiveMode] = useState("select");
   const [isCableTypeOpen, setIsCableTypeOpen] = useState(false);
+  const [cableTypeModalMode, setCableTypeModalMode] = useState("select");
+  const [cableTypes, setCableTypes] = useState([]);
   const [selectedCableType, setSelectedCableType] = useState(null);
 
   const handleModeChange = (mode) => {
     if (mode === "addCable") {
+      setCableTypeModalMode("select");
       setIsCableTypeOpen(true);
       return;
     }
@@ -123,18 +138,10 @@ function App() {
   const [activeProjectStatus, setActiveProjectStatus] = useState("draft");
   const [isCableModalOpen, setIsCableModalOpen] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
-  const [isSizeModalOpen, setIsSizeModalOpen] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [isPartsListOpen, setIsPartsListOpen] = useState(false);
-  const [boxSize, setBoxSize] = useState(BOX_SIZES.medium);
-  const [customBoxSize, setCustomBoxSize] = useState({ width: 160, height: 120 });
   const [componentForm, setComponentForm] = useState(DEFAULT_COMPONENT_FORM);
-  const [cableForm, setCableForm] = useState({
-    model: "Cable UTP Cat6",
-    section: "0.5mm²",
-    length: 10,
-    totalPrice: 20,
-  });
+  const [cableForm, setCableForm] = useState(() => ({ ...DEFAULT_CABLE_FORM }));
   const [editingCableId, setEditingCableId] = useState(null);
   const [isDesignLoading, setIsDesignLoading] = useState(false);
 
@@ -151,6 +158,7 @@ function App() {
     categories,
     productCategoryOptions,
     groupedProducts,
+    allSortedProducts,
     handleAddProduct,
     handleProductInputKeyDown,
     uploadProductImage,
@@ -176,18 +184,8 @@ function App() {
     updateManufacturer,
     deleteManufacturer,
     handleAddMargin,
+    updateMargin,
     deleteMargin,
-    templates,
-    templateForm,
-    setTemplateForm,
-    selectedTemplateId,
-    setSelectedTemplateId,
-    templateMargins,
-    templateMarginForm,
-    setTemplateMarginForm,
-    handleAddTemplate,
-    handleAddTemplateMargin,
-    deleteTemplateMargin,
   } = useCatalog({ authToken: accessToken });
 
   const {
@@ -218,6 +216,7 @@ function App() {
     zoom,
     backgroundImage,
     tooltip,
+    draftBox,
     draftCable,
     draftPolyline,
     handleCanvasClick,
@@ -226,6 +225,7 @@ function App() {
     handlePointerMove,
     handlePointerUp,
     handleBoxPointerDown,
+    handleBoxResizePointerDown,
     handleDevicePointerDown,
     handleDeviceDoubleClick,
     handleBoxDoubleClick,
@@ -243,17 +243,16 @@ function App() {
     renderCableLabelPosition,
   } = useCanvas({
     activeMode,
-    boxSize,
     selectedCableType,
     onOpenBoxModal: () => setIsBoxModalOpen(true),
     onOpenCableModal: (cable) => {
       setIsCableModalOpen(true);
       setEditingCableId(cable.id);
       setCableForm({
-        model: cable.model || "Cable UTP Cat6",
-        section: cable.section || "0.5mm²",
-        length: cable.length || 10,
-        totalPrice: cable.totalPrice || 0,
+        model: cable.model || selectedCableType?.label || "",
+        section: cable.section || "",
+        length: Number(cable.length) || 0,
+        totalPrice: Number(cable.totalPrice) || 0,
       });
     },
     onOpenDeviceModal: () => setIsCameraModalOpen(true),
@@ -279,6 +278,8 @@ function App() {
   useEffect(() => {
     if (!activeProjectId) {
       setIsDesignLoading(false);
+      setCableTypes([]);
+      setSelectedCableType(null);
       return;
     }
     let cancelled = false;
@@ -289,14 +290,21 @@ function App() {
         if (!response.ok) throw new Error("Error cargando diseño");
         const data = await response.json();
         if (cancelled) return;
-        setBoxes(Array.isArray(data.design?.boxes) ? data.design.boxes : []);
-        setCables(Array.isArray(data.design?.cables) ? data.design.cables : []);
-        setDevices(Array.isArray(data.design?.devices) ? data.design.devices : []);
+        const nextBoxes = Array.isArray(data.design?.boxes) ? data.design.boxes : [];
+        const nextCables = Array.isArray(data.design?.cables) ? data.design.cables : [];
+        const nextDevices = Array.isArray(data.design?.devices) ? data.design.devices : [];
+        const loadedTypes = normalizeCableTypes(data.design?.cableTypes);
+        const nextCableTypes = loadedTypes.length > 0 ? loadedTypes : deriveCableTypesFromCables(nextCables);
+        setBoxes(nextBoxes);
+        setCables(nextCables);
+        setDevices(nextDevices);
+        setCableTypes(nextCableTypes);
       } catch {
         if (!cancelled) {
           setBoxes([]);
           setCables([]);
           setDevices([]);
+          setCableTypes([]);
         }
       } finally {
         if (!cancelled) {
@@ -317,7 +325,7 @@ function App() {
       apiFetch(`/api/projects/${activeProjectId}/design`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ design: { boxes, cables, devices } }),
+        body: JSON.stringify({ design: { boxes, cables, devices, cableTypes } }),
       }, accessToken).catch(() => {
         // ignore
       });
@@ -325,33 +333,50 @@ function App() {
         apiFetch(`/api/projects/${activeProjectId}/versions/${activeVersion.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot: { design: { boxes, cables, devices } } }),
+          body: JSON.stringify({ snapshot: { design: { boxes, cables, devices, cableTypes } } }),
         }, accessToken).catch(() => {
           // ignore
         });
       }
     }, 500);
     return () => clearTimeout(timeout);
-  }, [activeProjectId, boxes, cables, devices, accessToken, activeVersion]);
+  }, [activeProjectId, boxes, cables, devices, cableTypes, accessToken, activeVersion]);
 
-  const restoreDesign = async (design) => {
+  const restoreDesign = useCallback(async (design) => {
     const nextBoxes = Array.isArray(design?.boxes) ? design.boxes : [];
     const nextCables = Array.isArray(design?.cables) ? design.cables : [];
     const nextDevices = Array.isArray(design?.devices) ? design.devices : [];
+    const loadedTypes = normalizeCableTypes(design?.cableTypes);
+    const nextCableTypes = loadedTypes.length > 0 ? loadedTypes : deriveCableTypesFromCables(nextCables);
     setBoxes(nextBoxes);
     setCables(nextCables);
     setDevices(nextDevices);
+    setCableTypes(nextCableTypes);
     if (!activeProjectId || String(activeProjectId).startsWith("local-")) return;
     try {
       await apiFetch(`/api/projects/${activeProjectId}/design`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ design: { boxes: nextBoxes, cables: nextCables, devices: nextDevices } }),
+        body: JSON.stringify({ design: { boxes: nextBoxes, cables: nextCables, devices: nextDevices, cableTypes: nextCableTypes } }),
       }, accessToken);
     } catch {
       // ignore
     }
-  };
+  }, [activeProjectId, accessToken, setBoxes, setCables, setDevices, setCableTypes]);
+
+  useEffect(() => {
+    if (!selectedCableType) return;
+    const match = cableTypes.find((type) => type.id === selectedCableType.id);
+    if (!match) {
+      setSelectedCableType(null);
+      return;
+    }
+    const nextLabel = String(match.label || "").trim();
+    const nextColor = String(match.color || DEFAULT_CABLE_COLOR);
+    if (nextLabel !== selectedCableType.label || nextColor !== selectedCableType.color) {
+      setSelectedCableType({ id: match.id, label: nextLabel, color: nextColor });
+    }
+  }, [cableTypes, selectedCableType]);
 
   useEffect(() => {
     if (!activeProjectId) {
@@ -399,7 +424,7 @@ function App() {
       .catch(() => {
         // ignore
       });
-  }, [activeProjectId, activeVersion?.id, accessToken]);
+  }, [activeProjectId, activeVersion?.id, accessToken, restoreDesign]);
 
   // Auto-calculate cable lengths and total prices when boxes/cable points change.
   useEffect(() => {
@@ -502,17 +527,22 @@ function App() {
       {
         title: "Proyectos",
         icon: FolderKanban,
-        items: ["Proyectos"],
+        items: [],
       },
       {
         title: "Catálogo",
         icon: Package,
-        items: ["Productos", "Categorías", "Distribuidores", "Márgenes", "Plantillas", "Fabricantes"],
+        items: ["Productos", "Proveedores y fabricantes", "Reglas de precio"],
       },
       {
         title: "Clientes",
         icon: Users,
         items: [],
+      },
+      {
+        title: "Operaciones",
+        icon: Briefcase,
+        items: OPERATIONS_MODULES.map((module) => module.title),
       },
     ],
     []
@@ -543,86 +573,24 @@ function App() {
   const isDashboardSection = activeSection === "Inicio";
   const isProductsSection = activeSection === "Catálogo" && activeSubsection === "Productos";
   const isCategoriesSection = activeSection === "Catálogo" && activeSubsection === "Categorías";
-  const isProvidersSection = activeSection === "Catálogo" && activeSubsection === "Distribuidores";
-  const isMarginsSection = activeSection === "Catálogo" && activeSubsection === "Márgenes";
-  const isTemplatesSection = activeSection === "Catálogo" && activeSubsection === "Plantillas";
-  const isManufacturersSection = activeSection === "Catálogo" && activeSubsection === "Fabricantes";
+  const isProvidersSection = activeSection === "Catálogo" && activeSubsection === "Proveedores y fabricantes";
+  const isMarginsSection = activeSection === "Catálogo" && activeSubsection === "Reglas de precio";
+  const isManufacturersSection = activeSection === "Catálogo" && activeSubsection === "Proveedores y fabricantes";
   const isProjectsSection = activeSection === "Proyectos";
   const isClientsSection = activeSection === "Clientes";
+  const isOperationsSection = activeSection === "Operaciones";
   const hideToolbar =
-    (isDashboardSection || isProductsSection || isCategoriesSection || isProvidersSection || isMarginsSection || isTemplatesSection || isManufacturersSection || isProjectsSection || isClientsSection) && !isProjectDesignMode;
-
-  const handleLogin = async ({ email, password }) => {
-    setLoginError("");
-    setLoginLoading(true);
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      const res = await apiFetch(
-        "/api/auth/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-          signal: controller.signal,
-        },
-        ""
-      );
-      clearTimeout(timeout);
-      const responseText = await res.text();
-      let data = {};
-      if (responseText) {
-        try {
-          data = JSON.parse(responseText);
-        } catch {
-          data = {};
-        }
-      }
-      if (!res.ok) {
-        const errorMessage =
-          data.error ||
-          responseText?.slice(0, 200) ||
-          `Error de login (${res.status})`;
-        setLoginError(errorMessage);
-        return;
-      }
-      const token = data.accessToken || data.access_token || data.token || "";
-      if (!token) {
-        const fallbackMessage = responseText
-          ? `Respuesta inesperada: ${responseText.slice(0, 200)}`
-          : "Token no recibido. Revisa la API.";
-        setLoginError(fallbackMessage);
-        return;
-      }
-      localStorage.setItem("accessToken", token);
-      setAccessToken(token);
-      const nextUser = data.user || null;
-      if (nextUser) {
-        localStorage.setItem("authUser", JSON.stringify(nextUser));
-        setAuthUser(nextUser);
-      } else if (token) {
-        const payload = decodeJwt(token);
-        if (payload) {
-          const derivedUser = {
-            id: payload.sub,
-            email: payload.email,
-            role: payload.role || "user",
-            name: payload.name,
-          };
-          localStorage.setItem("authUser", JSON.stringify(derivedUser));
-          setAuthUser(derivedUser);
-        }
-      }
-    } catch (error) {
-      const message =
-        error?.name === "AbortError"
-          ? "Tiempo de espera agotado. Revisa la API."
-          : "No se pudo iniciar sesión";
-      setLoginError(message);
-    } finally {
-      setLoginLoading(false);
-    }
-  };
+    (
+      isDashboardSection ||
+      isProductsSection ||
+      isCategoriesSection ||
+      isProvidersSection ||
+      isMarginsSection ||
+      isManufacturersSection ||
+      isProjectsSection ||
+      isClientsSection ||
+      isOperationsSection
+    ) && !isProjectDesignMode;
 
   const breadcrumbItems = useMemo(() => {
     const items = [
@@ -667,9 +635,18 @@ function App() {
 
   const helpMessage = useMemo(() => {
     if (activeMode === "addCable") return "Selecciona un cuadro de origen y destino para añadir el cable.";
-    if (activeMode === "addBox") return "Haz click sobre el lienzo para colocar un cuadro.";
+    if (activeMode === "addBox") return "Arrastra en el lienzo para dibujar el cuadro.";
     return "Ctrl + arrastrar para desplazar. Rueda para zoom.";
   }, [activeMode]);
+
+  const openCableTypesEditor = () => {
+    setCableTypeModalMode("manage");
+    setIsCableTypeOpen(true);
+  };
+
+  const handleCableTypesChange = (nextTypes) => {
+    setCableTypes(normalizeCableTypes(nextTypes));
+  };
 
   const categoryMarginMap = useMemo(() => {
     const map = new Map();
@@ -906,12 +883,6 @@ function App() {
     deleteCable(cableId);
   };
 
-  const applyBoxSize = (size) => {
-    const width = Number(size.width) || boxSize.width;
-    const height = Number(size.height) || boxSize.height;
-    setBoxSize({ ...size, width, height });
-    setIsSizeModalOpen(false);
-  };
   const getComponentErrors = () => {
     const errors = [];
     if (!componentForm.category) errors.push("Selecciona una categoría.");
@@ -996,17 +967,9 @@ function App() {
           onSectionToggle={handleSectionToggle}
           onSubsectionChange={handleSubsectionChange}
           user={authUser}
-          onLogout={async () => {
-            try {
-              await apiFetch("/api/auth/logout", { method: "POST" }, accessToken);
-            } catch {
-              // ignore
-            }
-            localStorage.removeItem("accessToken");
-            localStorage.removeItem("authUser");
-            setAccessToken("");
-            setAuthUser(null);
-          }}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onLogout={logout}
         />
         <div className="main">
         <Toolbar
@@ -1014,55 +977,37 @@ function App() {
           zoom={zoom}
           modes={MODES}
           activeMode={activeMode}
-          onModeChange={(mode) => {
-            if (mode === "addCable") {
-              // open type selector before switching to addCable
-              setIsCableTypeOpen(true);
-              return;
-            }
-            setActiveMode(mode);
-          }}
-          onZoom={(delta) => setZoom((prev) => Math.min(5, Math.max(0.1, prev + delta)))}
+          onModeChange={handleModeChange}
+          onZoom={handleZoomButton}
           onReset={resetView}
           onOpenImage={() => setIsImageModalOpen(true)}
-          onOpenSize={() => setIsSizeModalOpen(true)}
+          onOpenCableTypes={openCableTypesEditor}
           totals={{ total: totalBudget, boxes: boxesTotal, cables: cablesTotal }}
         />
 
         <CableTypeModal
           open={isCableTypeOpen}
+          mode={cableTypeModalMode}
+          types={cableTypes}
+          onChangeTypes={handleCableTypesChange}
           onClose={() => setIsCableTypeOpen(false)}
           onSelect={(type) => {
-            setSelectedCableType(type);
+            const nextLabel = String(type?.label || "").trim();
+            if (!nextLabel) return;
+            setSelectedCableType({
+              id: String(type.id),
+              label: nextLabel,
+              color: String(type.color || DEFAULT_CABLE_COLOR),
+            });
             setActiveMode("addCable");
           }}
         />
-        <nav className="breadcrumb" aria-label="Breadcrumb">
-          <button
-            className="breadcrumb__menu"
-            type="button"
-            aria-label="Abrir menú"
-            onClick={() => setIsSidebarCollapsed((prev) => !prev)}
-          >
-            <Menu size={18} />
-          </button>
-          {breadcrumbItems.map((item, index) => (
-            <span key={`${item.label}-${index}`} className="breadcrumb__item">
-              <button className="breadcrumb__link" type="button" onClick={item.onClick}>
-                {item.label}
-              </button>
-              {index < breadcrumbItems.length - 1 && <span className="breadcrumb__sep">/</span>}
-            </span>
-          ))}
-        </nav>
-        {!isSidebarCollapsed && (
-          <button
-            className="sidebar__overlay"
-            type="button"
-            aria-label="Cerrar menú"
-            onClick={() => setIsSidebarCollapsed(true)}
-          />
-        )}
+        <AppBreadcrumb
+          breadcrumbItems={breadcrumbItems}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
+          onCloseSidebar={() => setIsSidebarCollapsed(true)}
+        />
         <Toolbar
           visible={!hideToolbar && !isProjectDesignMode}
           zoom={zoom}
@@ -1072,7 +1017,6 @@ function App() {
           onZoom={handleZoomButton}
           onReset={resetView}
           onOpenImage={() => setIsImageModalOpen(true)}
-          onOpenSize={() => setIsSizeModalOpen(true)}
           totals={{ boxes: boxesTotal, cables: cablesTotal, total: totalBudget }}
         />
 
@@ -1083,7 +1027,7 @@ function App() {
           totals={{ total: totalBudget }}
           onNewProject={() => {
             setActiveSection("Proyectos");
-            setActiveSubsection("Proyectos");
+            setActiveSubsection("");
             setOpenSection("Proyectos");
           }}
           onOpenProject={(project) => {
@@ -1100,7 +1044,6 @@ function App() {
           isCategoriesSection={isCategoriesSection}
           isProvidersSection={isProvidersSection}
           isMarginsSection={isMarginsSection}
-          isTemplatesSection={isTemplatesSection}
           isManufacturersSection={isManufacturersSection}
           activeSubsection={activeSubsection}
           onSubsectionChange={handleSubsectionChange}
@@ -1118,6 +1061,7 @@ function App() {
           onUploadProductImage={uploadProductImage}
           onProductInputKeyDown={handleProductInputKeyDown}
           groupedProducts={groupedProducts}
+          allSortedProducts={allSortedProducts}
           onSort={handleSort}
           sortState={productSort}
           onUpdateProduct={updateProduct}
@@ -1143,18 +1087,8 @@ function App() {
           marginForm={marginForm}
           onMarginFormChange={(updates) => setMarginForm((prev) => ({ ...prev, ...updates }))}
           onAddMargin={handleAddMargin}
+          onUpdateMargin={updateMargin}
           onDeleteMargin={deleteMargin}
-          templates={templates}
-          templateForm={templateForm}
-          onTemplateFormChange={(updates) => setTemplateForm((prev) => ({ ...prev, ...updates }))}
-          onAddTemplate={handleAddTemplate}
-          selectedTemplateId={selectedTemplateId}
-          onSelectTemplate={setSelectedTemplateId}
-          templateMargins={templateMargins}
-          templateMarginForm={templateMarginForm}
-          onTemplateMarginFormChange={(updates) => setTemplateMarginForm((prev) => ({ ...prev, ...updates }))}
-          onAddTemplateMargin={handleAddTemplateMargin}
-          onDeleteTemplateMargin={deleteTemplateMargin}
         />
 
         <ClientsPage
@@ -1167,9 +1101,16 @@ function App() {
           onDeleteClient={deleteClient}
         />
 
+        <OperationsPage
+          key={`operations-${activeSubsection}`}
+          isActive={isOperationsSection && !isProjectDesignMode}
+          activeSubsection={activeSubsection}
+          authToken={accessToken}
+        />
+
         <ProjectsPage
           isProjectsSection={isProjectsSection && !isProjectDesignMode}
-          activeSubsection={activeSubsection}
+          searchQuery=""
           hideStatusControls={false}
           authToken={accessToken}
           clients={clients}
@@ -1182,7 +1123,7 @@ function App() {
           }}
           onProjectCreated={() => {
             setActiveSection("Proyectos");
-            setActiveSubsection("Proyectos");
+            setActiveSubsection("");
             setOpenSection("Proyectos");
           }}
           onEditSelected={() => setIsBoxModalOpen(true)}
@@ -1198,7 +1139,7 @@ function App() {
           isLoading={isDesignLoading}
           projectId={activeProjectId}
           authToken={accessToken}
-          designSnapshot={{ boxes, cables, devices }}
+          designSnapshot={{ boxes, cables, devices, cableTypes }}
           onRestoreDesign={restoreDesign}
           svgRef={svgRef}
           pan={pan}
@@ -1206,9 +1147,11 @@ function App() {
           backgroundImage={backgroundImage}
           boxes={boxes}
           cables={cables}
+          cableTypes={cableTypes}
           devices={devices}
           selectedBoxId={selectedBoxId}
           selectedDeviceId={selectedDeviceId}
+          draftBox={draftBox}
           draftCable={draftCable}
           draftPolyline={draftPolyline}
           tooltip={tooltip}
@@ -1220,6 +1163,7 @@ function App() {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onBoxPointerDown={handleBoxPointerDown}
+          onBoxResizePointerDown={handleBoxResizePointerDown}
           onDevicePointerDown={handleDevicePointerDown}
           onDeviceDoubleClick={handleDeviceDoubleClick}
           onBoxDoubleClick={handleBoxDoubleClick}
@@ -1247,63 +1191,45 @@ function App() {
           authorName={authUser?.name || authUser?.email || ""}
         />
 
-      <BoxModal
-        open={isBoxModalOpen}
-        box={selectedBox}
+      <AppGlobalModals
+        isBoxModalOpen={isBoxModalOpen}
+        selectedBox={selectedBox}
         componentForm={componentForm}
         catalog={catalog}
-        onClose={() => setIsBoxModalOpen(false)}
-        onNameChange={(name) => updateBox(selectedBox.id, { name })}
-        onZoneChange={(zone) => updateBox(selectedBox.id, { zone })}
+        onCloseBoxModal={() => setIsBoxModalOpen(false)}
+        onUpdateBoxName={(name) => updateBox(selectedBox.id, { name })}
+        onUpdateBoxZone={(zone) => updateBox(selectedBox.id, { zone })}
         onComponentFormChange={(updates) => setComponentForm((prev) => ({ ...prev, ...updates }))}
         onAddComponent={handleAddComponent}
         onRemoveComponent={removeComponent}
         onDeleteBox={handleDeleteBox}
         componentErrors={componentErrors}
-        isNameValid={isBoxNameValid}
-      />
-
-      <CameraModal
-        open={isCameraModalOpen}
-        device={devices.find((device) => device.id === selectedDeviceId) || null}
-        catalog={cameraCatalog}
-        categoryName={cameraCategoryKey || "Cámaras"}
-        onClose={() => setIsCameraModalOpen(false)}
-        onUpdate={(updates) =>
+        isBoxNameValid={isBoxNameValid}
+        isCameraModalOpen={isCameraModalOpen}
+        selectedDevice={devices.find((device) => device.id === selectedDeviceId) || null}
+        cameraCatalog={cameraCatalog}
+        cameraCategoryKey={cameraCategoryKey}
+        onCloseCameraModal={() => setIsCameraModalOpen(false)}
+        onUpdateDevice={(updates) =>
           setDevices((prev) => prev.map((device) => (device.id === selectedDeviceId ? { ...device, ...updates } : device)))
         }
-        onDelete={() =>
+        onDeleteDevice={() =>
           setDevices((prev) => prev.filter((device) => device.id !== selectedDeviceId))
         }
-      />
-
-      <CableModal
-        open={isCableModalOpen}
+        isCableModalOpen={isCableModalOpen}
         cableForm={cableForm}
-        onChange={(updates) => setCableForm((prev) => ({ ...prev, ...updates }))}
-        onClose={() => setIsCableModalOpen(false)}
-        onSave={handleCableFormSave}
-        errors={cableErrors}
-      />
-
-      <ImageModal
-        open={isImageModalOpen}
+        onCableFormChange={(updates) => setCableForm((prev) => ({ ...prev, ...updates }))}
+        onCloseCableModal={() => setIsCableModalOpen(false)}
+        onSaveCable={handleCableFormSave}
+        cableErrors={cableErrors}
+        isImageModalOpen={isImageModalOpen}
         backgroundImage={backgroundImage}
-        onClose={() => setIsImageModalOpen(false)}
-        onUrlChange={setBackgroundImage}
-        onFileChange={handleBackgroundFile}
+        onCloseImageModal={() => setIsImageModalOpen(false)}
+        onBackgroundUrlChange={setBackgroundImage}
+        onBackgroundFileChange={handleBackgroundFile}
       />
 
       </div>
-
-      <SizeModal
-        open={isSizeModalOpen}
-        boxSizes={BOX_SIZES}
-        customSize={customBoxSize}
-        onCustomSizeChange={(updates) => setCustomBoxSize((prev) => ({ ...prev, ...updates }))}
-        onApply={applyBoxSize}
-        onClose={() => setIsSizeModalOpen(false)}
-      />
     </div>
   );
 }
