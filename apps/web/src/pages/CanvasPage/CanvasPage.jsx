@@ -7,14 +7,12 @@ import { buildGroupedRows, exportBomCsv } from "./canvasPartsUtils.js";
 function CanvasPage({
   hideCanvas,
   isLoading = false,
-  authToken = '',
   svgRef,
   pan,
   zoom,
   backgroundImage,
   boxes,
   cables,
-  cableTypes,
   devices,
   selectedBoxId,
   selectedDeviceId,
@@ -42,17 +40,10 @@ function CanvasPage({
   renderBoxLabel,
   partsListOpen,
   onTogglePartsList,
-  hideStatusControls = false,
   onToggleComponentDiscount,
   onUpdateComponentCustomerDiscount,
   onToggleComponentActive,
   onUpdateCableColor,
-  projectStatus,
-  onProjectStatusChange,
-  statusOptions,
-  projectId,
-  snapshotPricing,
-  onRestoreDesign,
 }) {
   const [openBoxes, setOpenBoxes] = useState({});
 

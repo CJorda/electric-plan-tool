@@ -13,10 +13,14 @@ export default function ProductEditorDrawer({
   discountedPrice,
   saveLabel,
   canSave,
+  secondaryActionLabel,
+  secondaryActionDisabled,
   onClose,
   onSave,
+  onSecondaryAction,
   onImageChange,
   onChangeField,
+  children,
 }) {
   if (!open || !form) {
     return null;
@@ -44,12 +48,23 @@ export default function ProductEditorDrawer({
             onImageChange={onImageChange}
             onChange={onChangeField}
           />
+          {children}
         </div>
 
         <footer className="products__drawer-actions">
           <button type="button" className="products__modal-cancel" onClick={onClose}>
             Cancelar
           </button>
+          {secondaryActionLabel && onSecondaryAction ? (
+            <button
+              type="button"
+              className="products__secondary"
+              onClick={onSecondaryAction}
+              disabled={Boolean(secondaryActionDisabled)}
+            >
+              {secondaryActionLabel}
+            </button>
+          ) : null}
           <button type="button" className="products__primary" onClick={onSave} disabled={!canSave}>
             {saveLabel}
           </button>

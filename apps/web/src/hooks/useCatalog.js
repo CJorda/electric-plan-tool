@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../lib/api.js";
+
+const normalizeProductWithDiscountPercent = (item) => {
+  const base = Number(item?.distributorPrice) || 0;
+  const discount = Number(item?.discountPrice) || 0;
+  const percent = base > 0 ? Math.max(0, ((base - discount) / base) * 100) : 0;
+  return { ...item, discountPercent: percent };
+};
 
 function useCatalog({ authToken = "" } = {}) {
   const apiEnabled = import.meta.env.VITE_API_ENABLED === "true";
@@ -19,6 +26,7 @@ function useCatalog({ authToken = "" } = {}) {
   });
   const [products, setProducts] = useState([]);
   const [productCategoryFilter, setProductCategoryFilter] = useState("Todas");
+  const deferredProductCategoryFilter = useDeferredValue(productCategoryFilter);
   const [productSort, setProductSort] = useState({ key: "name", direction: "asc" });
   const [categoryForm, setCategoryForm] = useState({ name: "", description: "", parentId: "" });
   const [categories, setCategories] = useState([]);
@@ -671,18 +679,127 @@ function useCatalog({ authToken = "" } = {}) {
       );
       if (!response.ok) throw new Error("Error actualizando producto");
       const updated = await response.json();
-      const percent = updated.distributorPrice
-        ? Math.max(0, ((updated.distributorPrice - updated.discountPrice) / updated.distributorPrice) * 100)
-        : 0;
       setProducts((prev) =>
         prev.map((product) =>
-          product.id === productId ? { ...updated, discountPercent: percent } : product
+          product.id === productId ? normalizeProductWithDiscountPercent(updated) : product
         )
       );
     } catch {
       // ignore
     }
   };
+
+  const loadProductPriceHistory = useCallback(
+    async (productId, distributorId = "") => {
+      if (!productId) return [];
+      if (!apiEnabled) return [];
+      const query = distributorId ? `?distributorId=${encodeURIComponent(distributorId)}` : "";
+      const response = await authFetch(`/api/catalog/products/${productId}/prices${query}`);
+      if (!response.ok) {
+        throw new Error("Error cargando historial de tarifas");
+      }
+      const data = await response.json();
+      return data.items || [];
+    },
+    [apiEnabled, authFetch]
+  );
+
+  const createProductTariff = useCallback(
+    async (productId, tariff) => {
+      if (!productId || !tariff) return null;
+
+      const normalizedDistributorId = tariff.distributorId ? String(tariff.distributorId) : "";
+      const payload = {
+        distributorId: normalizedDistributorId || null,
+        distributorPrice: Number(tariff.distributorPrice) || 0,
+        discountPrice:
+          tariff.discountPrice == null ? null : Number(tariff.discountPrice) || 0,
+        shippingCost: Number(tariff.shippingCost) || 0,
+        leadTime: tariff.leadTime || "",
+        note: tariff.note || "Nueva tarifa",
+      };
+
+      if (!apiEnabled) {
+        let nextProduct = null;
+        setProducts((prev) =>
+          prev.map((product) => {
+            const sameProduct = product.id === productId;
+            const sameDistributor = String(product.distributorId || "") === normalizedDistributorId;
+            if (!sameProduct || !sameDistributor) return product;
+            nextProduct = normalizeProductWithDiscountPercent({
+              ...product,
+              distributorId: normalizedDistributorId,
+              distributorPrice: payload.distributorPrice,
+              discountPrice:
+                payload.discountPrice == null
+                  ? payload.distributorPrice
+                  : payload.discountPrice,
+              shippingCost: payload.shippingCost,
+              leadTime: payload.leadTime,
+            });
+            return nextProduct;
+          })
+        );
+        return nextProduct;
+      }
+
+      const response = await authFetch(`/api/catalog/products/${productId}/prices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error("Error guardando nueva tarifa");
+      }
+
+      const updated = normalizeProductWithDiscountPercent(await response.json());
+
+      setProducts((prev) =>
+        prev.map((product) => {
+          const sameProduct = product.id === productId;
+          const sameDistributor =
+            String(product.distributorId || "") === String(updated.distributorId || "");
+          return sameProduct && sameDistributor ? updated : product;
+        })
+      );
+
+      return updated;
+    },
+    [apiEnabled, authFetch]
+  );
+
+  const deleteProductTariffEntry = useCallback(
+    async (productId, priceId, distributorId = "") => {
+      if (!productId || !priceId) return null;
+      if (!apiEnabled) return null;
+
+      const response = await authFetch(`/api/catalog/products/${productId}/prices/${priceId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Error eliminando entrada de historial");
+      }
+
+      const data = await response.json();
+      const updated = data?.product ? normalizeProductWithDiscountPercent(data.product) : null;
+
+      if (updated) {
+        setProducts((prev) =>
+          prev.map((product) => {
+            const sameProduct = product.id === productId;
+            const sameDistributor =
+              String(product.distributorId || "") === String(distributorId || "");
+            return sameProduct && sameDistributor ? updated : product;
+          })
+        );
+      }
+
+      return updated;
+    },
+    [apiEnabled, authFetch]
+  );
 
   const deleteProduct = async (productId) => {
     if (!apiEnabled) {
@@ -706,9 +823,9 @@ function useCatalog({ authToken = "" } = {}) {
   };
 
   const filteredProducts = useMemo(() => {
-    if (productCategoryFilter === "Todas") return products;
-    return products.filter((product) => product.category === productCategoryFilter);
-  }, [productCategoryFilter, products]);
+    if (deferredProductCategoryFilter === "Todas") return products;
+    return products.filter((product) => product.category === deferredProductCategoryFilter);
+  }, [deferredProductCategoryFilter, products]);
 
   const sortProductsList = useCallback((items) => {
     const sorted = [...items];
@@ -799,12 +916,7 @@ function useCatalog({ authToken = "" } = {}) {
         }
         if (productsRes.ok) {
           const data = await productsRes.json();
-          const items = (data.items || []).map((item) => {
-            const base = Number(item.distributorPrice) || 0;
-            const discount = Number(item.discountPrice) || 0;
-            const percent = base > 0 ? Math.max(0, ((base - discount) / base) * 100) : 0;
-            return { ...item, discountPercent: percent };
-          });
+          const items = (data.items || []).map((item) => normalizeProductWithDiscountPercent(item));
           setProducts(items);
         }
         if (providersRes.ok) {
@@ -883,6 +995,9 @@ function useCatalog({ authToken = "" } = {}) {
     handleProductInputKeyDown,
     uploadProductImage,
     updateProduct,
+    loadProductPriceHistory,
+    createProductTariff,
+    deleteProductTariffEntry,
     deleteProduct,
     handleSort,
     handleAddCategory,

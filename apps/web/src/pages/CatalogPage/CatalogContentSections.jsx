@@ -23,6 +23,9 @@ export default function CatalogContentSections({
   onSort,
   sortState,
   onUpdateProduct,
+  onLoadProductPriceHistory,
+  onCreateProductTariff,
+  onDeleteProductTariffEntry,
   onDeleteProduct,
   categoryForm,
   onCategoryFormChange,
@@ -73,6 +76,9 @@ export default function CatalogContentSections({
               onSort={onSort}
               sortState={sortState}
               onUpdateProduct={onUpdateProduct}
+              onLoadProductPriceHistory={onLoadProductPriceHistory}
+              onCreateProductTariff={onCreateProductTariff}
+              onDeleteProductTariffEntry={onDeleteProductTariffEntry}
               onDeleteProduct={onDeleteProduct}
               categoryForm={categoryForm}
               onCategoryFormChange={onCategoryFormChange}

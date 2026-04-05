@@ -356,10 +356,3 @@ export async function buildQuotePdfBuffer(project, items = [], opts = {}) {
   });
 }
 
-export async function streamQuotePdf(res, project, items = [], opts = {}) {
-  const pdfBuffer = await buildQuotePdfBuffer(project, items, opts);
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="quote-${project.id}.pdf"`);
-  res.send(pdfBuffer);
-  return pdfBuffer;
-}

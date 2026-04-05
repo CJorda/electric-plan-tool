@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import CustomSelect from "../ui/CustomSelect.jsx";
 import DeleteIconButton from "../ui/DeleteIconButton.jsx";
 import './MarginsSection.css';
@@ -15,17 +15,18 @@ export default function MarginsSection({
 }) {
   const [draftById, setDraftById] = useState({});
 
-  useEffect(() => {
+  const mergedDraftById = useMemo(() => {
     const next = {};
     margins.forEach((margin) => {
       next[margin.id] = {
         providerId: margin.providerId || "",
         categoryId: margin.categoryId || "",
         marginPercent: Number(margin.marginPercent) || 0,
+        ...(draftById[margin.id] || {}),
       };
     });
-    setDraftById(next);
-  }, [margins]);
+    return next;
+  }, [margins, draftById]);
 
   const updateDraft = (marginId, updates) => {
     setDraftById((prev) => ({
@@ -38,7 +39,7 @@ export default function MarginsSection({
   };
 
   const handleSaveMargin = (marginId) => {
-    const draft = draftById[marginId];
+    const draft = mergedDraftById[marginId];
     if (!draft) return;
     if (!draft.providerId || !draft.categoryId) return;
     onUpdateMargin?.(marginId, {
@@ -123,7 +124,7 @@ export default function MarginsSection({
                   <tr key={margin.id}>
                     <td>
                       <CustomSelect
-                        value={draftById[margin.id]?.providerId || ""}
+                        value={mergedDraftById[margin.id]?.providerId || ""}
                         options={[
                           { value: "", label: "Distribuidor" },
                           ...providers.map((provider) => ({ value: provider.id, label: provider.name })),
@@ -134,7 +135,7 @@ export default function MarginsSection({
                     </td>
                     <td>
                       <CustomSelect
-                        value={draftById[margin.id]?.categoryId || ""}
+                        value={mergedDraftById[margin.id]?.categoryId || ""}
                         options={[
                           { value: "", label: "Categoría" },
                           ...categories.map((category) => ({ value: category.id, label: category.name })),
@@ -150,7 +151,7 @@ export default function MarginsSection({
                           min="0"
                           max="100"
                           step="0.1"
-                          value={draftById[margin.id]?.marginPercent ?? 0}
+                          value={mergedDraftById[margin.id]?.marginPercent ?? 0}
                           onChange={(event) => updateDraft(margin.id, { marginPercent: event.target.value })}
                           onKeyDown={handleRowEnter(margin.id)}
                           aria-label={`Margen en porcentaje para ${margin.categoryName || "categoría"}`}

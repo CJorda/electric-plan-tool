@@ -9,7 +9,7 @@ export const subscribeToToasts = (listener) => {
   return () => listeners.delete(listener);
 };
 
-export const toast = (message, options = {}) => {
+const toast = (message, options = {}) => {
   const payload = {
     id: `toast-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     type: options.type || "info",

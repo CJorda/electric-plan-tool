@@ -161,3 +161,10 @@
   font-size: 12px;
   margin: 0;
 }
+
+.modal__tariff-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: -4px;
+}

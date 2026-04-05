@@ -25,6 +25,16 @@ function CableTypeModal({ open, mode = "select", types = [], onClose, onSelect, 
 
   const normalizedTypes = useMemo(() => (Array.isArray(types) ? types.map((type) => normalizeType(type)) : []), [types]);
 
+  const resolvedActiveTypeId = useMemo(() => {
+    if (!open || normalizedTypes.length === 0) {
+      return null;
+    }
+    if (activeTypeId && normalizedTypes.some((type) => type.id === activeTypeId)) {
+      return activeTypeId;
+    }
+    return normalizedTypes[0].id;
+  }, [open, normalizedTypes, activeTypeId]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -37,17 +47,6 @@ function CableTypeModal({ open, mode = "select", types = [], onClose, onSelect, 
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [open, onClose]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (normalizedTypes.length === 0) {
-      setActiveTypeId(null);
-      return;
-    }
-    if (!activeTypeId || !normalizedTypes.some((type) => type.id === activeTypeId)) {
-      setActiveTypeId(normalizedTypes[0].id);
-    }
-  }, [open, normalizedTypes, activeTypeId]);
 
   if (!open) return null;
 
@@ -79,7 +78,7 @@ function CableTypeModal({ open, mode = "select", types = [], onClose, onSelect, 
   const removeType = (typeId) => {
     const next = normalizedTypes.filter((type) => type.id !== typeId);
     setTypes(next);
-    if (activeTypeId === typeId) {
+    if (resolvedActiveTypeId === typeId) {
       setActiveTypeId(next[0]?.id || null);
     }
   };
@@ -120,7 +119,7 @@ function CableTypeModal({ open, mode = "select", types = [], onClose, onSelect, 
 
         <div className="cable-type-modal__grid">
           {normalizedTypes.map((type, index) => {
-            const isActive = activeTypeId === type.id;
+            const isActive = resolvedActiveTypeId === type.id;
             const hasLabel = String(type.label || "").trim().length > 0;
 
             return (

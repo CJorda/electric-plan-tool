@@ -1,9 +1,11 @@
+import { Suspense, lazy } from 'react';
 import './DashboardPage.css';
 import { CheckCircle2, Clock3, FolderOpen, Euro } from 'lucide-react';
 import DashboardStatCard from '../../components/Dashboard/DashboardStatCard.jsx';
 import DashboardQuickActions from '../../components/Dashboard/DashboardQuickActions.jsx';
 import DashboardRecentProjects from '../../components/Dashboard/DashboardRecentProjects.jsx';
-import DashboardCharts from '../../components/Dashboard/DashboardCharts.jsx';
+
+const DashboardCharts = lazy(() => import('../../components/Dashboard/DashboardCharts.jsx'));
 
 export default function DashboardPage({
   isActive,
@@ -111,7 +113,9 @@ export default function DashboardPage({
         />
       </div>
 
-      <DashboardCharts projects={projects} />
+      <Suspense fallback={null}>
+        <DashboardCharts projects={projects} />
+      </Suspense>
 
       <div className="dashboard__grid">
         <DashboardQuickActions

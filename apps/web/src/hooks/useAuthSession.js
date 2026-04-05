@@ -16,6 +16,17 @@ export default function useAuthSession() {
   const [loginLoading, setLoginLoading] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleSessionExpired = () => {
+      setAccessToken("");
+      setAuthUser(null);
+      setLoginError((prev) => prev || "Sesión expirada. Inicia sesión de nuevo.");
+    };
+    window.addEventListener("auth:session-expired", handleSessionExpired);
+    return () => window.removeEventListener("auth:session-expired", handleSessionExpired);
+  }, []);
+
+  useEffect(() => {
     if (!accessToken || authUser) return;
     const payload = decodeJwt(accessToken);
     if (!payload) return;

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import "./CatalogPage.css";
 import CatalogContentSections from "./CatalogContentSections.jsx";
 import CatalogLoadingState from "./CatalogLoadingState.jsx";
@@ -25,6 +26,9 @@ function CatalogPage({
   onSort,
   sortState,
   onUpdateProduct,
+  onLoadProductPriceHistory,
+  onCreateProductTariff,
+  onDeleteProductTariffEntry,
   onDeleteProduct,
   categoryForm,
   onCategoryFormChange,
@@ -50,6 +54,8 @@ function CatalogPage({
   onUpdateMargin,
   onDeleteMargin,
 }) {
+  "use memo";
+
   const isProvidersCatalogSection =
     isProvidersSection || activeSubsection === "Proveedores y fabricantes";
   const isManufacturersCatalogSection = isManufacturersSection;
@@ -96,6 +102,9 @@ function CatalogPage({
       onSort={onSort}
       sortState={sortState}
       onUpdateProduct={onUpdateProduct}
+      onLoadProductPriceHistory={onLoadProductPriceHistory}
+      onCreateProductTariff={onCreateProductTariff}
+      onDeleteProductTariffEntry={onDeleteProductTariffEntry}
       onDeleteProduct={onDeleteProduct}
       categoryForm={categoryForm}
       onCategoryFormChange={onCategoryFormChange}
@@ -124,4 +133,4 @@ function CatalogPage({
   );
 }
 
-export default CatalogPage;
+export default memo(CatalogPage);

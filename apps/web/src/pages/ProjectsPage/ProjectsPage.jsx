@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import './ProjectsPage.css';
 import useProjects from '../../hooks/useProjects.js';
 import ProjectDeleteModal from '../../components/ProjectDeleteModal/ProjectDeleteModal.jsx';
@@ -76,23 +76,47 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
   const [versionsLoadingByProject, setVersionsLoadingByProject] = useState({});
   const [quickFilter, setQuickFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const deferredQuickFilter = useDeferredValue(quickFilter);
+  const deferredStatusFilter = useDeferredValue(statusFilter);
 
   useEffect(() => {
     if (!isProjectsSection) return;
-    setQuickFilter('all');
-    setStatusFilter('all');
+    startTransition(() => {
+      setQuickFilter('all');
+      setStatusFilter('all');
+    });
   }, [isProjectsSection]);
 
   const filteredProjects = useMemo(() => {
     return buildFilteredProjects({
       projects,
-      searchQuery,
+      searchQuery: deferredSearchQuery,
       attachmentsByProject,
       projectTotals,
-      quickFilter,
-      statusFilter,
+      quickFilter: deferredQuickFilter,
+      statusFilter: deferredStatusFilter,
     });
-  }, [projects, searchQuery, attachmentsByProject, projectTotals, quickFilter, statusFilter]);
+  }, [
+    projects,
+    deferredSearchQuery,
+    attachmentsByProject,
+    projectTotals,
+    deferredQuickFilter,
+    deferredStatusFilter,
+  ]);
+
+  const handleQuickFilterChange = (nextQuickFilter) => {
+    startTransition(() => {
+      setQuickFilter(nextQuickFilter);
+    });
+  };
+
+  const handleStatusFilterChange = (nextStatusFilter) => {
+    startTransition(() => {
+      setStatusFilter(nextStatusFilter);
+    });
+  };
 
   const exportProjectsCsv = () => {
     downloadProjectsCsv({ filteredProjects, projectTotals });
@@ -548,9 +572,9 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
     <section className="projects">
       <ProjectsPageHeader
         quickFilter={quickFilter}
-        onQuickFilterChange={setQuickFilter}
+        onQuickFilterChange={handleQuickFilterChange}
         statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
+        onStatusFilterChange={handleStatusFilterChange}
         statusOptions={STATUS_OPTIONS}
         onOpenCreate={() => setIsCreateOpen(true)}
         onExportCsv={exportProjectsCsv}

@@ -42,7 +42,7 @@ export const getDiscountedUnitPrice = (component) => {
   return Math.max(0, base * (1 - percent / 100));
 };
 
-export const buildBomRows = (groupedRows) => {
+const buildBomRows = (groupedRows) => {
   const rows = [];
   groupedRows.forEach((group) => {
     group.items.forEach((item) => {

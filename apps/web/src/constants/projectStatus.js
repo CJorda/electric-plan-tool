@@ -4,11 +4,3 @@ export const STATUS_OPTIONS = [
   { value: 'published', label: 'Publicado' },
   { value: 'archived', label: 'Archivado' },
 ];
-
-export const STATUS_LABELS = {
-  draft: 'Borrador',
-  confirmed: 'Confirmado',
-  published: 'Publicado',
-  archived: 'Archivado',
-  local: 'Local',
-};

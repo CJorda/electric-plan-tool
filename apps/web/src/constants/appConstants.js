@@ -12,6 +12,12 @@ export const DEFAULT_COMPONENT_FORM = {
   model: "",
   quantity: 1,
   unitPrice: 0,
+  catalogKey: "",
+  productId: "",
+  distributorId: "",
+  distributorName: "",
+  priceHistoryId: "",
+  tariffLabel: "",
 };
 
 export const STATUS_OPTIONS = [
@@ -20,11 +26,3 @@ export const STATUS_OPTIONS = [
   { value: "published", label: "Publicado" },
   { value: "archived", label: "Archivado" },
 ];
-
-export const STATUS_LABELS = {
-  draft: "Borrador",
-  confirmed: "Confirmado",
-  published: "Publicado",
-  archived: "Archivado",
-  local: "Local",
-};

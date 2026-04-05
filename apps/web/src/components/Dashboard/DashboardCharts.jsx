@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef } from "react";
-import * as echarts from "echarts";
+import * as echarts from "echarts/core";
+import { BarChart, LineChart, PieChart } from "echarts/charts";
+import { GridComponent, TooltipComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
 import "./DashboardCharts.css";
+
+echarts.use([LineChart, BarChart, PieChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
 const STATUS_LABELS = {
   draft: "Borrador",
@@ -68,7 +73,14 @@ export default function DashboardCharts({ projects = [] }) {
     const chart = echarts.init(lineRef.current);
     chart.setOption({
       backgroundColor: "transparent",
-      grid: { left: 16, right: 16, top: 30, bottom: 24, containLabel: true },
+      grid: {
+        left: 16,
+        right: 16,
+        top: 30,
+        bottom: 24,
+        outerBoundsMode: "same",
+        outerBoundsContain: "axisLabel",
+      },
       xAxis: {
         type: "category",
         data: monthly.labels,
@@ -110,7 +122,14 @@ export default function DashboardCharts({ projects = [] }) {
     const values = Object.keys(statusCounts).map((key) => statusCounts[key]);
     chart.setOption({
       backgroundColor: "transparent",
-      grid: { left: 16, right: 16, top: 30, bottom: 24, containLabel: true },
+      grid: {
+        left: 16,
+        right: 16,
+        top: 30,
+        bottom: 24,
+        outerBoundsMode: "same",
+        outerBoundsContain: "axisLabel",
+      },
       xAxis: {
         type: "category",
         data: labels,

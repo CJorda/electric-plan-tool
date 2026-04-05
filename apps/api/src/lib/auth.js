@@ -13,20 +13,19 @@ const parseDurationMs = (value, fallbackMs) => {
   return amount * (multipliers[unit] || 1000);
 };
 
-export const accessTtlMs = parseDurationMs(env.JWT_ACCESS_TTL, 15 * 60 * 1000);
 export const refreshTtlMs = parseDurationMs(env.JWT_REFRESH_TTL, 7 * 24 * 60 * 60 * 1000);
 
 export const hashPassword = async (password) => bcrypt.hash(password, 10);
 export const verifyPassword = async (password, hash) => bcrypt.compare(password, hash);
 
-export const signAccessToken = (user) =>
+const signAccessToken = (user) =>
   jwt.sign(
     { sub: user.id, email: user.email, role: user.role || "user" },
     env.JWT_ACCESS_SECRET,
     { expiresIn: env.JWT_ACCESS_TTL }
   );
 
-export const signRefreshToken = (user) =>
+const signRefreshToken = (user) =>
   jwt.sign(
     { sub: user.id },
     env.JWT_REFRESH_SECRET,

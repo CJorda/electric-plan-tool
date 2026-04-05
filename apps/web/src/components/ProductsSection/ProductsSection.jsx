@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import DeleteIconButton from "../ui/DeleteIconButton.jsx";
 import ProductDeleteModal from "./ProductDeleteModal.jsx";
 import ProductsCategoriesDrawer from "./ProductsCategoriesDrawer.jsx";
 import ProductEditorDrawer from "./ProductEditorDrawer.jsx";
@@ -20,6 +21,21 @@ const getDiscountedPrice = (pvp, discountPercent) => {
   if (base <= 0) return 0;
   const raw = base * (1 - percent / 100);
   return Number.isFinite(raw) ? Math.max(0, raw) : 0;
+};
+
+const formatCurrency = (value) => `€${(Number(value) || 0).toFixed(2)}`;
+
+const formatDateTime = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 const buildProductForm = (product) => ({
@@ -49,6 +65,9 @@ function ProductsSection({
   onSort,
   sortState,
   onUpdateProduct,
+  onLoadProductPriceHistory,
+  onCreateProductTariff,
+  onDeleteProductTariffEntry,
   onDeleteProduct,
   categoryForm,
   onCategoryFormChange,
@@ -66,6 +85,11 @@ function ProductsSection({
   const [detailForm, setDetailForm] = useState(null);
   const [detailImageFile, setDetailImageFile] = useState(null);
   const [detailImagePreview, setDetailImagePreview] = useState("");
+  const [priceHistoryItems, setPriceHistoryItems] = useState([]);
+  const [isPriceHistoryLoading, setIsPriceHistoryLoading] = useState(false);
+  const [deletingHistoryEntryId, setDeletingHistoryEntryId] = useState("");
+  const [tariffNote, setTariffNote] = useState("");
+  const [isCreatingTariff, setIsCreatingTariff] = useState(false);
   const [isCategoriesDrawerOpen, setIsCategoriesDrawerOpen] = useState(false);
 
   const categoryOptions = useMemo(() => {
@@ -96,6 +120,11 @@ function ProductsSection({
     [providers]
   );
 
+  const providersById = useMemo(
+    () => new Map((providers || []).map((provider) => [provider.id, provider.name])),
+    [providers]
+  );
+
   const sourceProducts = useMemo(() => {
     if (Array.isArray(allSortedProducts) && allSortedProducts.length > 0) {
       return allSortedProducts;
@@ -108,7 +137,6 @@ function ProductsSection({
     setSelectedNodeId,
     expandedNodeIds,
     toggleNode,
-    categoriesById,
     childrenByParentId,
     rootNodes,
     subtreeCountById,
@@ -129,6 +157,44 @@ function ProductsSection({
     () => sourceProducts.find((product) => product.id === detailProductId) || null,
     [sourceProducts, detailProductId]
   );
+
+  const priceHistoryWithDelta = useMemo(() => {
+    return priceHistoryItems.map((item, index) => {
+      const nextItem = priceHistoryItems[index + 1] || null;
+      const currentPrice = Number(item.discountPrice ?? item.distributorPrice) || 0;
+      const previousPrice = nextItem
+        ? Number(nextItem.discountPrice ?? nextItem.distributorPrice) || 0
+        : null;
+      const delta = previousPrice == null ? null : currentPrice - previousPrice;
+      const deltaPercent =
+        previousPrice && previousPrice !== 0 && delta != null
+          ? (delta / previousPrice) * 100
+          : null;
+      return {
+        ...item,
+        currentPrice,
+        delta,
+        deltaPercent,
+      };
+    });
+  }, [priceHistoryItems]);
+
+  const loadPriceHistoryForProduct = async (productId, distributorId) => {
+    if (!onLoadProductPriceHistory || !productId) {
+      setPriceHistoryItems([]);
+      return;
+    }
+
+    setIsPriceHistoryLoading(true);
+    try {
+      const items = await onLoadProductPriceHistory(productId, distributorId || "");
+      setPriceHistoryItems(Array.isArray(items) ? items : []);
+    } catch {
+      setPriceHistoryItems([]);
+    } finally {
+      setIsPriceHistoryLoading(false);
+    }
+  };
 
   const handleUploadImage = async (productId, file) => {
     if (!file || !onUploadProductImage) return;
@@ -168,6 +234,9 @@ function ProductsSection({
     setDetailForm(buildProductForm(product));
     setDetailImageFile(null);
     setDetailImagePreview(imageUrls[product.id] || "");
+    setTariffNote("");
+    setPriceHistoryItems([]);
+    void loadPriceHistoryForProduct(product.id, product.distributorId || "");
   };
 
   const closeDetail = () => {
@@ -178,6 +247,9 @@ function ProductsSection({
       URL.revokeObjectURL(detailImagePreview);
     }
     setDetailImagePreview("");
+    setTariffNote("");
+    setPriceHistoryItems([]);
+    setIsPriceHistoryLoading(false);
   };
 
   const handleCreateImageChange = (file) => {
@@ -228,6 +300,55 @@ function ProductsSection({
     }
 
     closeDetail();
+  };
+
+  const handleCreateTariff = async () => {
+    if (!selectedProduct || !detailForm || !onCreateProductTariff) return;
+
+    const distributorPrice = toNumber(detailForm.distributorPrice);
+    const discountPercent = toNumber(detailForm.discountPercent);
+
+    setIsCreatingTariff(true);
+    try {
+      const updated = await onCreateProductTariff(selectedProduct.id, {
+        distributorId: detailForm.distributorId,
+        distributorPrice,
+        discountPrice: getDiscountedPrice(distributorPrice, discountPercent),
+        shippingCost: toNumber(detailForm.shippingCost),
+        leadTime: detailForm.leadTime,
+        note: tariffNote,
+      });
+
+      if (updated) {
+        setDetailForm(buildProductForm(updated));
+      }
+
+      await loadPriceHistoryForProduct(
+        selectedProduct.id,
+        detailForm.distributorId || ""
+      );
+      setTariffNote("");
+    } finally {
+      setIsCreatingTariff(false);
+    }
+  };
+
+  const handleDeleteTariffEntry = async (entry) => {
+    if (!entry?.id || !selectedProduct || !onDeleteProductTariffEntry || !detailForm) return;
+    setDeletingHistoryEntryId(entry.id);
+    try {
+      const updated = await onDeleteProductTariffEntry(
+        selectedProduct.id,
+        entry.id,
+        detailForm.distributorId || ""
+      );
+      if (updated) {
+        setDetailForm(buildProductForm(updated));
+      }
+      await loadPriceHistoryForProduct(selectedProduct.id, detailForm.distributorId || "");
+    } finally {
+      setDeletingHistoryEntryId("");
+    }
   };
 
   const renderTreeNode = (node, depth = 0) => {
@@ -370,11 +491,84 @@ function ProductsSection({
         }
         saveLabel="Guardar cambios"
         canSave={Boolean(detailForm?.name?.trim()) && Boolean(detailForm?.category)}
+        secondaryActionLabel="Nueva tarifa"
+        secondaryActionDisabled={
+          isCreatingTariff ||
+          !detailForm?.distributorId ||
+          !Number.isFinite(toNumber(detailForm?.distributorPrice))
+        }
+        onSecondaryAction={handleCreateTariff}
         onClose={closeDetail}
         onSave={handleSaveDetail}
         onImageChange={handleDetailImageChange}
         onChangeField={(field, value) => setDetailForm((prev) => ({ ...prev, [field]: value }))}
-      />
+      >
+        <div className="products__tariff-panel">
+          <label>
+            Nota de nueva tarifa (opcional)
+            <input
+              value={tariffNote}
+              onChange={(event) => setTariffNote(event.target.value)}
+              placeholder="Ej: subida mensual proveedor"
+            />
+          </label>
+
+          <div className="products__tariff-history">
+            <strong>Historial de tarifas</strong>
+            {isPriceHistoryLoading ? (
+              <p className="products__tariff-empty">Cargando historial...</p>
+            ) : priceHistoryWithDelta.length === 0 ? (
+              <p className="products__tariff-empty">Sin histórico para este proveedor.</p>
+            ) : (
+              <ul className="products__tariff-list">
+                {priceHistoryWithDelta.map((entry) => {
+                  const providerName = entry.distributorId
+                    ? providersById.get(entry.distributorId) || "Proveedor"
+                    : "General";
+                  const hasDelta = entry.delta != null;
+                  const deltaValue = hasDelta ? Number(entry.delta) : 0;
+                  const isUp = deltaValue > 0;
+                  const isDown = deltaValue < 0;
+                  const deltaClass = isUp
+                    ? "is-up"
+                    : isDown
+                      ? "is-down"
+                      : "is-flat";
+                  const percentText =
+                    entry.deltaPercent == null
+                      ? ""
+                      : ` (${entry.deltaPercent > 0 ? "+" : ""}${entry.deltaPercent.toFixed(2)}%)`;
+
+                  return (
+                    <li key={entry.id} className="products__tariff-item">
+                      <div className="products__tariff-meta">
+                        <span>{providerName}</span>
+                        <span>{formatDateTime(entry.createdAt)}</span>
+                      </div>
+                      <div className="products__tariff-values">
+                        <span className="products__tariff-price">{formatCurrency(entry.currentPrice)}</span>
+                        <span className={`products__tariff-delta ${deltaClass}`}>
+                          {hasDelta
+                            ? `${deltaValue > 0 ? "+" : ""}${formatCurrency(deltaValue)}${percentText}`
+                            : "Base"}
+                        </span>
+                      </div>
+                      <div className="products__tariff-footer">
+                        {entry.note ? <small>{entry.note}</small> : <small>Sin nota</small>}
+                        <DeleteIconButton
+                          ariaLabel="Eliminar entrada de tarifa"
+                          onClick={() => handleDeleteTariffEntry(entry)}
+                          disabled={deletingHistoryEntryId === entry.id}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      </ProductEditorDrawer>
 
       <ProductDeleteModal
         open={Boolean(deleteCandidate)}

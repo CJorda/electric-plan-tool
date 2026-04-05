@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 export default function useProductsTreeState({
   categoryNodes = [],
   categories = [],
   sourceProducts = [],
 }) {
-  const [selectedNodeId, setSelectedNodeId] = useState("all");
-  const [expandedNodeIds, setExpandedNodeIds] = useState(() => new Set());
+  const [selectedNodeIdState, setSelectedNodeIdState] = useState("all");
+  const [expandedNodeIdsState, setExpandedNodeIdsState] = useState(() => new Set());
 
   const categoriesById = useMemo(
     () => new Map(categoryNodes.map((category) => [category.id, category])),
@@ -32,24 +32,22 @@ export default function useProductsTreeState({
 
   const rootNodes = useMemo(() => childrenByParentId.get(null) || [], [childrenByParentId]);
 
-  useEffect(() => {
+  const selectedNodeId = useMemo(() => {
     if (rootNodes.length === 0) {
-      setSelectedNodeId("all");
-      return;
+      return "all";
     }
+    if (selectedNodeIdState !== "all" && !categoriesById.has(selectedNodeIdState)) {
+      return "all";
+    }
+    return selectedNodeIdState;
+  }, [rootNodes.length, selectedNodeIdState, categoriesById]);
 
-    setExpandedNodeIds((prev) => {
-      if (prev.size > 0) return prev;
-      return new Set(rootNodes.map((node) => node.id));
-    });
-
-    setSelectedNodeId((prev) => {
-      if (prev !== "all" && !categoriesById.has(prev)) {
-        return "all";
-      }
-      return prev;
-    });
-  }, [rootNodes, categoriesById]);
+  const expandedNodeIds = useMemo(() => {
+    if (expandedNodeIdsState.size > 0 || rootNodes.length === 0) {
+      return expandedNodeIdsState;
+    }
+    return new Set(rootNodes.map((node) => node.id));
+  }, [expandedNodeIdsState, rootNodes]);
 
   const descendantCategoryNamesById = useMemo(() => {
     const cache = new Map();
@@ -114,7 +112,7 @@ export default function useProductsTreeState({
   }, [selectedNodeId, categoriesById, categories]);
 
   const toggleNode = (nodeId) => {
-    setExpandedNodeIds((prev) => {
+    setExpandedNodeIdsState((prev) => {
       const next = new Set(prev);
       if (next.has(nodeId)) {
         next.delete(nodeId);
@@ -127,7 +125,7 @@ export default function useProductsTreeState({
 
   return {
     selectedNodeId,
-    setSelectedNodeId,
+    setSelectedNodeId: setSelectedNodeIdState,
     expandedNodeIds,
     toggleNode,
     categoriesById,

@@ -13,6 +13,7 @@ export default function AppGlobalModals({
   onUpdateBoxName,
   onUpdateBoxZone,
   onComponentFormChange,
+  onLoadProductPriceHistory,
   onAddComponent,
   onRemoveComponent,
   onDeleteBox,
@@ -53,6 +54,7 @@ export default function AppGlobalModals({
         onDeleteBox={onDeleteBox}
         componentErrors={componentErrors}
         isNameValid={isBoxNameValid}
+        onLoadProductPriceHistory={onLoadProductPriceHistory}
       />
 
       <CameraModal

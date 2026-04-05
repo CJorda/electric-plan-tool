@@ -1,6 +1,7 @@
+import { memo } from "react";
 import ProjectList from "../../components/ProjectList/ProjectList.jsx";
 
-export default function ProjectsPageContent({
+function ProjectsPageContent({
   projectsCount,
   filteredProjects,
   error,
@@ -24,6 +25,8 @@ export default function ProjectsPageContent({
   onStatusChange,
   hideStatusControls,
 }) {
+  "use memo";
+
   return (
     <div className="projects__placeholder">
       <h3>Listado de proyectos ({filteredProjects.length})</h3>
@@ -75,3 +78,5 @@ export default function ProjectsPageContent({
     </div>
   );
 }
+
+export default memo(ProjectsPageContent);

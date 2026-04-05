@@ -1,25 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { Home, FolderKanban, Package, Users, Briefcase } from "lucide-react";
 import Sidebar from "./components/Sidebar/Sidebar.jsx";
 import Toolbar from "./components/Toolbar/Toolbar.jsx";
-import CatalogPage from "./pages/CatalogPage/CatalogPage.jsx";
-import DashboardPage from "./pages/DashboardPage/DashboardPage.jsx";
-import CanvasPage from "./pages/CanvasPage/CanvasPage.jsx";
-import ProjectsPage from "./pages/ProjectsPage/ProjectsPage.jsx";
-import ClientsPage from "./pages/ClientsPage/ClientsPage.jsx";
-import OperationsPage from "./pages/OperationsPage/OperationsPage.jsx";
 import LoginPage from "./pages/LoginPage/LoginPage.jsx";
 import { apiFetch } from "./lib/api.js";
-import CableTypeModal from "./components/modals/CableTypeModal/CableTypeModal.jsx";
 import useCatalog from "./hooks/useCatalog.js";
 import useProjects from "./hooks/useProjects.js";
 import useCanvas from "./hooks/useCanvas.js";
 import useClients from "./hooks/useClients.js";
 import useAuthSession from "./hooks/useAuthSession.js";
 import AppBreadcrumb from "./components/AppShell/AppBreadcrumb.jsx";
-import AppGlobalModals from "./components/AppShell/AppGlobalModals.jsx";
 import { OPERATIONS_MODULES } from "./constants/operationsModules.js";
-import { DEFAULT_COMPONENT_FORM, MODES, STATUS_LABELS, STATUS_OPTIONS } from "./constants/appConstants.js";
+import { DEFAULT_COMPONENT_FORM, MODES, STATUS_OPTIONS } from "./constants/appConstants.js";
 import "./App.css";
 
 const createId = () => {
@@ -37,6 +29,17 @@ const DEFAULT_CABLE_FORM = {
   length: 0,
   totalPrice: 0,
 };
+
+const CatalogPage = lazy(() => import("./pages/CatalogPage/CatalogPage.jsx"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage/DashboardPage.jsx"));
+const CanvasPage = lazy(() => import("./pages/CanvasPage/CanvasPage.jsx"));
+const ProjectsPage = lazy(() => import("./pages/ProjectsPage/ProjectsPage.jsx"));
+const ClientsPage = lazy(() => import("./pages/ClientsPage/ClientsPage.jsx"));
+const OperationsPage = lazy(() => import("./pages/OperationsPage/OperationsPage.jsx"));
+const CableTypeModal = lazy(() => import("./components/modals/CableTypeModal/CableTypeModal.jsx"));
+const AppGlobalModals = lazy(() => import("./components/AppShell/AppGlobalModals.jsx"));
+
+const LAZY_SECTION_FALLBACK = <div className="app__lazy-fallback skeleton" aria-hidden="true" />;
 
 const normalizeCableType = (type) => {
   const label = String(type?.label || "").trim();
@@ -144,6 +147,14 @@ function App() {
   const [cableForm, setCableForm] = useState(() => ({ ...DEFAULT_CABLE_FORM }));
   const [editingCableId, setEditingCableId] = useState(null);
   const [isDesignLoading, setIsDesignLoading] = useState(false);
+  const [loadedPanels, setLoadedPanels] = useState(() => ({
+    dashboard: true,
+    catalog: false,
+    clients: false,
+    operations: false,
+    projects: false,
+    canvas: false,
+  }));
 
   const {
     isLoading: isCatalogLoading,
@@ -163,6 +174,9 @@ function App() {
     handleProductInputKeyDown,
     uploadProductImage,
     updateProduct,
+    loadProductPriceHistory,
+    createProductTariff,
+    deleteProductTariffEntry,
     deleteProduct,
     handleSort,
     handleAddCategory,
@@ -522,13 +536,28 @@ function App() {
     categories.forEach((category) => {
       map[category.name] = [];
     });
+    const seenByCategory = new Map();
     products.forEach((product) => {
       const price = Number(product.discountPrice) > 0 ? product.discountPrice : product.distributorPrice;
-      if (!map[product.category]) map[product.category] = [];
-      map[product.category].push({
+      const categoryName = product.category || "Sin categoría";
+      if (!map[categoryName]) map[categoryName] = [];
+      const seen = seenByCategory.get(categoryName) || new Set();
+      const catalogKey = `${String(product.id || product.name || "")}::${String(product.distributorId || "")}`;
+      if (seen.has(catalogKey)) {
+        return;
+      }
+      seen.add(catalogKey);
+      seenByCategory.set(categoryName, seen);
+      map[categoryName].push({
+        catalogKey,
+        productId: String(product.id || ""),
+        distributorId: String(product.distributorId || ""),
+        distributorName: product.distributorName || "",
         name: product.name,
         price: Number(price) || 0,
         discountPercent: Number(product.discountPercent) || 0,
+        priceHistoryId: "",
+        tariffLabel: "Tarifa actual",
       });
     });
     return map;
@@ -547,11 +576,30 @@ function App() {
     if (catalogCategories.length === 0) return;
     const nextCategory = catalog[componentForm.category] ? componentForm.category : catalogCategories[0];
     const models = catalog[nextCategory] || [];
-    const currentModel = models.find((item) => item.name === componentForm.model);
-    const nextModel = currentModel?.name || models[0]?.name || "";
-    const nextPrice = currentModel?.price ?? models[0]?.price ?? 0;
+    const currentModel =
+      models.find((item) => item.catalogKey === componentForm.catalogKey) ||
+      models.find((item) => item.name === componentForm.model);
+    const selectedModel = currentModel || models[0] || null;
+    const nextModel = selectedModel?.name || "";
+    const nextPrice = selectedModel?.price ?? 0;
+    const nextCatalogKey = selectedModel?.catalogKey || "";
+    const nextProductId = selectedModel?.productId || "";
+    const nextDistributorId = selectedModel?.distributorId || "";
+    const nextDistributorName = selectedModel?.distributorName || "";
+    const nextPriceHistoryId = selectedModel?.priceHistoryId || "";
+    const nextTariffLabel = selectedModel?.tariffLabel || "";
     setComponentForm((prev) => {
-      if (prev.category === nextCategory && prev.model === nextModel && prev.unitPrice === nextPrice) {
+      if (
+        prev.category === nextCategory &&
+        prev.model === nextModel &&
+        prev.unitPrice === nextPrice &&
+        prev.catalogKey === nextCatalogKey &&
+        prev.productId === nextProductId &&
+        prev.distributorId === nextDistributorId &&
+        prev.distributorName === nextDistributorName &&
+        prev.priceHistoryId === nextPriceHistoryId &&
+        prev.tariffLabel === nextTariffLabel
+      ) {
         return prev;
       }
       return {
@@ -559,9 +607,15 @@ function App() {
         category: nextCategory,
         model: nextModel,
         unitPrice: nextPrice,
+        catalogKey: nextCatalogKey,
+        productId: nextProductId,
+        distributorId: nextDistributorId,
+        distributorName: nextDistributorName,
+        priceHistoryId: nextPriceHistoryId,
+        tariffLabel: nextTariffLabel,
       };
     });
-  }, [catalog, catalogCategories, componentForm.category, componentForm.model]);
+  }, [catalog, catalogCategories, componentForm.category, componentForm.model, componentForm.catalogKey]);
 
   const sidebarSections = useMemo(
     () => [
@@ -595,24 +649,34 @@ function App() {
   );
 
   const handleSectionToggle = (sectionTitle) => {
-    setActiveSection(sectionTitle);
     const nextItems = sidebarSections.find((section) => section.title === sectionTitle)?.items || [];
-    setActiveSubsection(nextItems[0] || "");
-    setOpenSection((prev) => (prev === sectionTitle ? null : sectionTitle));
-    setIsProjectDesignMode(false);
+    startTransition(() => {
+      setActiveSection(sectionTitle);
+      setActiveSubsection(nextItems[0] || "");
+      setOpenSection((prev) => (prev === sectionTitle ? null : sectionTitle));
+      setIsProjectDesignMode(false);
+    });
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches) {
       setIsSidebarCollapsed(true);
     }
   };
 
   const handleSubsectionChange = (sectionTitle, subsection) => {
-    setActiveSection(sectionTitle);
-    setActiveSubsection(subsection);
-    setOpenSection(sectionTitle);
-    setIsProjectDesignMode(false);
+    startTransition(() => {
+      setActiveSection(sectionTitle);
+      setActiveSubsection(subsection);
+      setOpenSection(sectionTitle);
+      setIsProjectDesignMode(false);
+    });
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches) {
       setIsSidebarCollapsed(true);
     }
+  };
+
+  const handleProductCategoryFilterChange = (nextFilter) => {
+    startTransition(() => {
+      setProductCategoryFilter(nextFilter);
+    });
   };
 
   const selectedBox = boxes.find((box) => box.id === selectedBoxId) || null;
@@ -625,6 +689,12 @@ function App() {
   const isProjectsSection = activeSection === "Proyectos";
   const isClientsSection = activeSection === "Clientes";
   const isOperationsSection = activeSection === "Operaciones";
+  const isCatalogSectionActive =
+    (isProductsSection ||
+      isCategoriesSection ||
+      isProvidersSection ||
+      isMarginsSection ||
+      isManufacturersSection) && !isProjectDesignMode;
   const hideToolbar =
     (
       isDashboardSection ||
@@ -637,6 +707,44 @@ function App() {
       isClientsSection ||
       isOperationsSection
     ) && !isProjectDesignMode;
+
+  useEffect(() => {
+    const nextDashboard = isDashboardSection && !isProjectDesignMode;
+    const nextCatalog = isCatalogSectionActive;
+    const nextClients = isClientsSection && !isProjectDesignMode;
+    const nextOperations = isOperationsSection && !isProjectDesignMode;
+    const nextProjects = isProjectsSection && !isProjectDesignMode;
+    const nextCanvas = isProjectDesignMode;
+
+    setLoadedPanels((prev) => {
+      const updated = {
+        dashboard: prev.dashboard || nextDashboard,
+        catalog: prev.catalog || nextCatalog,
+        clients: prev.clients || nextClients,
+        operations: prev.operations || nextOperations,
+        projects: prev.projects || nextProjects,
+        canvas: prev.canvas || nextCanvas,
+      };
+      if (
+        updated.dashboard === prev.dashboard &&
+        updated.catalog === prev.catalog &&
+        updated.clients === prev.clients &&
+        updated.operations === prev.operations &&
+        updated.projects === prev.projects &&
+        updated.canvas === prev.canvas
+      ) {
+        return prev;
+      }
+      return updated;
+    });
+  }, [
+    isDashboardSection,
+    isCatalogSectionActive,
+    isClientsSection,
+    isOperationsSection,
+    isProjectsSection,
+    isProjectDesignMode,
+  ]);
 
   const breadcrumbItems = useMemo(() => {
     const items = [
@@ -758,13 +866,26 @@ function App() {
 
   const handleAddComponent = () => {
     if (!selectedBox) return;
-    const selectedModel = catalog[componentForm.category]?.find((item) => item.name === componentForm.model);
-    const modelName = componentForm.model;
-    const unitPrice = selectedModel?.price || 0;
+    const selectedModel =
+      catalog[componentForm.category]?.find((item) => item.catalogKey === componentForm.catalogKey) ||
+      catalog[componentForm.category]?.find((item) => item.name === componentForm.model);
+    const modelName = selectedModel?.name || componentForm.model;
+    const unitPrice = Number(componentForm.unitPrice ?? selectedModel?.price) || 0;
     const discountPercent = selectedModel?.discountPercent || 0;
+    const catalogKey = selectedModel?.catalogKey || componentForm.catalogKey || "";
+    const productId = selectedModel?.productId || componentForm.productId || "";
+    const distributorId = selectedModel?.distributorId || componentForm.distributorId || "";
+    const distributorName = selectedModel?.distributorName || componentForm.distributorName || "";
+    const priceHistoryId = componentForm.priceHistoryId || selectedModel?.priceHistoryId || "";
+    const tariffLabel = componentForm.tariffLabel || selectedModel?.tariffLabel || "";
     const quantity = Number(componentForm.quantity) || 0;
     const existing = selectedBox.components.find(
-      (component) => component.category === componentForm.category && component.model === modelName
+      (component) =>
+        component.category === componentForm.category &&
+        component.model === modelName &&
+        String(component.catalogKey || "") === String(catalogKey) &&
+        String(component.priceHistoryId || "") === String(priceHistoryId) &&
+        Number(component.unitPrice || 0) === Number(unitPrice || 0)
     );
     if (existing) {
       const nextQuantity = (Number(existing.quantity) || 0) + quantity;
@@ -779,6 +900,12 @@ function App() {
         unitPrice: nextUnitPrice,
         discountPercent: existing.discountPercent ?? discountPercent,
         customerDiscountPercent: existing.customerDiscountPercent ?? 0,
+        catalogKey,
+        productId: productId || existing.productId || "",
+        distributorId: distributorId || existing.distributorId || "",
+        distributorName: distributorName || existing.distributorName || "",
+        priceHistoryId: priceHistoryId || "",
+        tariffLabel: tariffLabel || existing.tariffLabel || "",
         quantity: nextQuantity,
         total: base * nextQuantity,
       };
@@ -797,6 +924,12 @@ function App() {
         discountPercent,
         customerDiscountPercent: 0,
         discountApplied: false,
+        catalogKey,
+        productId,
+        distributorId,
+        distributorName,
+        priceHistoryId,
+        tariffLabel,
         productActive: true,
         total: unitPrice * quantity,
       };
@@ -962,6 +1095,7 @@ function App() {
   const isBoxNameValid = selectedBox?.name?.trim().length > 0;
   const componentErrors = getComponentErrors();
   const cableErrors = getCableErrors();
+  const hasGlobalModalOpen = isBoxModalOpen || isCameraModalOpen || isCableModalOpen || isImageModalOpen;
 
 
 
@@ -1074,23 +1208,27 @@ function App() {
           totals={{ total: totalBudget, boxes: boxesTotal, cables: cablesTotal }}
         />
 
-        <CableTypeModal
-          open={isCableTypeOpen}
-          mode={cableTypeModalMode}
-          types={cableTypes}
-          onChangeTypes={handleCableTypesChange}
-          onClose={() => setIsCableTypeOpen(false)}
-          onSelect={(type) => {
-            const nextLabel = String(type?.label || "").trim();
-            if (!nextLabel) return;
-            setSelectedCableType({
-              id: String(type.id),
-              label: nextLabel,
-              color: String(type.color || DEFAULT_CABLE_COLOR),
-            });
-            setActiveMode("addCable");
-          }}
-        />
+        {isCableTypeOpen ? (
+          <Suspense fallback={LAZY_SECTION_FALLBACK}>
+            <CableTypeModal
+              open={isCableTypeOpen}
+              mode={cableTypeModalMode}
+              types={cableTypes}
+              onChangeTypes={handleCableTypesChange}
+              onClose={() => setIsCableTypeOpen(false)}
+              onSelect={(type) => {
+                const nextLabel = String(type?.label || "").trim();
+                if (!nextLabel) return;
+                setSelectedCableType({
+                  id: String(type.id),
+                  label: nextLabel,
+                  color: String(type.color || DEFAULT_CABLE_COLOR),
+                });
+                setActiveMode("addCable");
+              }}
+            />
+          </Suspense>
+        ) : null}
         <Toolbar
           visible={!hideToolbar && !isProjectDesignMode}
           zoom={zoom}
@@ -1103,221 +1241,239 @@ function App() {
           totals={{ boxes: boxesTotal, cables: cablesTotal, total: totalBudget }}
         />
 
-        <DashboardPage
-          isActive={isDashboardSection && !isProjectDesignMode}
-          isLoading={isProjectsLoading}
-          projects={projects}
-          totals={{ total: totalBudget }}
-          onNewProject={() => {
-            setActiveSection("Proyectos");
-            setActiveSubsection("");
-            setOpenSection("Proyectos");
-          }}
-          onOpenProject={(project) => {
-            if (!project?.id) return;
-            setActiveProjectId(project.id);
-            setActiveProjectStatus(project.status || "draft");
-            setIsProjectDesignMode(true);
-            setActiveMode("select");
-          }}
-        />
+        {loadedPanels.dashboard ? (
+          <Suspense fallback={LAZY_SECTION_FALLBACK}>
+            <DashboardPage
+              isActive={isDashboardSection && !isProjectDesignMode}
+              isLoading={isProjectsLoading}
+              projects={projects}
+              totals={{ total: totalBudget }}
+              onNewProject={() => {
+                startTransition(() => {
+                  setActiveSection("Proyectos");
+                  setActiveSubsection("");
+                  setOpenSection("Proyectos");
+                });
+              }}
+              onOpenProject={(project) => {
+                if (!project?.id) return;
+                startTransition(() => {
+                  setActiveProjectId(project.id);
+                  setActiveProjectStatus(project.status || "draft");
+                  setIsProjectDesignMode(true);
+                  setActiveMode("select");
+                });
+              }}
+            />
+          </Suspense>
+        ) : null}
 
-        <CatalogPage
-          isProductsSection={isProductsSection}
-          isCategoriesSection={isCategoriesSection}
-          isProvidersSection={isProvidersSection}
-          isMarginsSection={isMarginsSection}
-          isManufacturersSection={isManufacturersSection}
-          activeSubsection={activeSubsection}
-          onSubsectionChange={handleSubsectionChange}
-          isLoading={isCatalogLoading}
-          authToken={accessToken}
-          productCategoryOptions={productCategoryOptions}
-          categories={categories}
-          manufacturers={manufacturers}
-          providers={providers}
-          productCategoryFilter={productCategoryFilter}
-          onFilterChange={setProductCategoryFilter}
-          productForm={productForm}
-          onProductFormChange={(updates) => setProductForm((prev) => ({ ...prev, ...updates }))}
-          onAddProduct={handleAddProduct}
-          onUploadProductImage={uploadProductImage}
-          onProductInputKeyDown={handleProductInputKeyDown}
-          groupedProducts={groupedProducts}
-          allSortedProducts={allSortedProducts}
-          onSort={handleSort}
-          sortState={productSort}
-          onUpdateProduct={updateProduct}
-          onDeleteProduct={deleteProduct}
-          categoryForm={categoryForm}
-          onCategoryFormChange={(updates) => setCategoryForm((prev) => ({ ...prev, ...updates }))}
-          onAddCategory={handleAddCategory}
-          onUpdateCategory={updateCategory}
-          onDeleteCategory={deleteCategory}
-          providerForm={providerForm}
-          onProviderFormChange={(updates) => setProviderForm((prev) => ({ ...prev, ...updates }))}
-          onAddProvider={handleAddProvider}
-          onUpdateProvider={updateProvider}
-          onDeleteProvider={deleteProvider}
-          manufacturerForm={manufacturerForm}
-          onManufacturerFormChange={(updates) =>
-            setManufacturerForm((prev) => ({ ...prev, ...updates }))
-          }
-          onAddManufacturer={handleAddManufacturer}
-          onUpdateManufacturer={updateManufacturer}
-          onDeleteManufacturer={deleteManufacturer}
-          margins={margins}
-          marginForm={marginForm}
-          onMarginFormChange={(updates) => setMarginForm((prev) => ({ ...prev, ...updates }))}
-          onAddMargin={handleAddMargin}
-          onUpdateMargin={updateMargin}
-          onDeleteMargin={deleteMargin}
-        />
+        {loadedPanels.catalog ? (
+          <Suspense fallback={LAZY_SECTION_FALLBACK}>
+            <CatalogPage
+              isProductsSection={isProductsSection}
+              isCategoriesSection={isCategoriesSection}
+              isProvidersSection={isProvidersSection}
+              isMarginsSection={isMarginsSection}
+              isManufacturersSection={isManufacturersSection}
+              activeSubsection={activeSubsection}
+              onSubsectionChange={handleSubsectionChange}
+              isLoading={isCatalogLoading}
+              authToken={accessToken}
+              productCategoryOptions={productCategoryOptions}
+              categories={categories}
+              manufacturers={manufacturers}
+              providers={providers}
+              productCategoryFilter={productCategoryFilter}
+              onFilterChange={handleProductCategoryFilterChange}
+              productForm={productForm}
+              onProductFormChange={(updates) => setProductForm((prev) => ({ ...prev, ...updates }))}
+              onAddProduct={handleAddProduct}
+              onUploadProductImage={uploadProductImage}
+              onProductInputKeyDown={handleProductInputKeyDown}
+              groupedProducts={groupedProducts}
+              allSortedProducts={allSortedProducts}
+              onSort={handleSort}
+              sortState={productSort}
+              onUpdateProduct={updateProduct}
+              onLoadProductPriceHistory={loadProductPriceHistory}
+              onCreateProductTariff={createProductTariff}
+              onDeleteProductTariffEntry={deleteProductTariffEntry}
+              onDeleteProduct={deleteProduct}
+              categoryForm={categoryForm}
+              onCategoryFormChange={(updates) => setCategoryForm((prev) => ({ ...prev, ...updates }))}
+              onAddCategory={handleAddCategory}
+              onUpdateCategory={updateCategory}
+              onDeleteCategory={deleteCategory}
+              providerForm={providerForm}
+              onProviderFormChange={(updates) => setProviderForm((prev) => ({ ...prev, ...updates }))}
+              onAddProvider={handleAddProvider}
+              onUpdateProvider={updateProvider}
+              onDeleteProvider={deleteProvider}
+              manufacturerForm={manufacturerForm}
+              onManufacturerFormChange={(updates) =>
+                setManufacturerForm((prev) => ({ ...prev, ...updates }))
+              }
+              onAddManufacturer={handleAddManufacturer}
+              onUpdateManufacturer={updateManufacturer}
+              onDeleteManufacturer={deleteManufacturer}
+              margins={margins}
+              marginForm={marginForm}
+              onMarginFormChange={(updates) => setMarginForm((prev) => ({ ...prev, ...updates }))}
+              onAddMargin={handleAddMargin}
+              onUpdateMargin={updateMargin}
+              onDeleteMargin={deleteMargin}
+            />
+          </Suspense>
+        ) : null}
 
-        <ClientsPage
-          isActive={isClientsSection && !isProjectDesignMode}
-          clients={clients}
-          clientForm={clientForm}
-          onClientFormChange={(updates) => setClientForm((prev) => ({ ...prev, ...updates }))}
-          onAddClient={handleAddClient}
-          onUpdateClient={updateClient}
-          onDeleteClient={deleteClient}
-        />
+        {loadedPanels.clients ? (
+          <Suspense fallback={LAZY_SECTION_FALLBACK}>
+            <ClientsPage
+              isActive={isClientsSection && !isProjectDesignMode}
+              clients={clients}
+              clientForm={clientForm}
+              onClientFormChange={(updates) => setClientForm((prev) => ({ ...prev, ...updates }))}
+              onAddClient={handleAddClient}
+              onUpdateClient={updateClient}
+              onDeleteClient={deleteClient}
+            />
+          </Suspense>
+        ) : null}
 
-        <OperationsPage
-          key={`operations-${activeSubsection}`}
-          isActive={isOperationsSection && !isProjectDesignMode}
-          activeSubsection={activeSubsection}
-          authToken={accessToken}
-        />
+        {loadedPanels.operations ? (
+          <Suspense fallback={LAZY_SECTION_FALLBACK}>
+            <OperationsPage
+              key={`operations-${activeSubsection}`}
+              isActive={isOperationsSection && !isProjectDesignMode}
+              activeSubsection={activeSubsection}
+              authToken={accessToken}
+            />
+          </Suspense>
+        ) : null}
 
-        <ProjectsPage
-          isProjectsSection={isProjectsSection && !isProjectDesignMode}
-          searchQuery=""
-          hideStatusControls={false}
-          authToken={accessToken}
-          clients={clients}
-          onOpenDesigner={(projectId, status, version) => {
-            setActiveProjectId(projectId);
-            setActiveProjectStatus(status || "draft");
-            setActiveVersion(version ? { id: version.id, name: version.name, locked: version.locked } : null);
-            setIsProjectDesignMode(true);
-            setActiveMode("select");
-          }}
-          onProjectCreated={() => {
-            setActiveSection("Proyectos");
-            setActiveSubsection("");
-            setOpenSection("Proyectos");
-          }}
-          onEditSelected={() => setIsBoxModalOpen(true)}
-          onToggleComponentDiscount={toggleComponentDiscount}
-          onUpdateComponentCustomerDiscount={updateComponentCustomerDiscount}
-          onToggleComponentActive={toggleComponentActive}
-          partsListOpen={isPartsListOpen}
-          onTogglePartsList={() => setIsPartsListOpen((prev) => !prev)}
-        />
+        {loadedPanels.projects ? (
+          <Suspense fallback={LAZY_SECTION_FALLBACK}>
+            <ProjectsPage
+              isProjectsSection={isProjectsSection && !isProjectDesignMode}
+              searchQuery=""
+              hideStatusControls={false}
+              authToken={accessToken}
+              clients={clients}
+              onOpenDesigner={(projectId, status, version) => {
+                startTransition(() => {
+                  setActiveProjectId(projectId);
+                  setActiveProjectStatus(status || "draft");
+                  setActiveVersion(version ? { id: version.id, name: version.name, locked: version.locked } : null);
+                  setIsProjectDesignMode(true);
+                  setActiveMode("select");
+                });
+              }}
+              onProjectCreated={() => {
+                startTransition(() => {
+                  setActiveSection("Proyectos");
+                  setActiveSubsection("");
+                  setOpenSection("Proyectos");
+                });
+              }}
+              onEditSelected={() => setIsBoxModalOpen(true)}
+              onToggleComponentDiscount={toggleComponentDiscount}
+              onUpdateComponentCustomerDiscount={updateComponentCustomerDiscount}
+              onToggleComponentActive={toggleComponentActive}
+              partsListOpen={isPartsListOpen}
+              onTogglePartsList={() => setIsPartsListOpen((prev) => !prev)}
+            />
+          </Suspense>
+        ) : null}
 
-        <CanvasPage
-          hideCanvas={hideToolbar}
-          isLoading={isDesignLoading}
-          projectId={activeProjectId}
-          authToken={accessToken}
-          designSnapshot={{ boxes, cables, devices, cableTypes }}
-          snapshotPricing={{
-            componentsTotal: boxesTotal,
-            cablesTotal,
-            devicesTotal,
-            marginTotal,
-            totalBudget,
-          }}
-          onRestoreDesign={restoreDesign}
-          svgRef={svgRef}
-          pan={pan}
-          zoom={zoom}
-          backgroundImage={backgroundImage}
-          boxes={boxes}
-          cables={cables}
-          cableTypes={cableTypes}
-          devices={devices}
-          selectedBoxId={selectedBoxId}
-          selectedDeviceId={selectedDeviceId}
-          draftBox={draftBox}
-          draftCable={draftCable}
-          draftPolyline={draftPolyline}
-          tooltip={tooltip}
-          activeModeLabel={MODES.find((m) => m.id === activeMode)?.label || ""}
-          helpMessage={helpMessage}
-          onCanvasClick={handleCanvasClick}
-          onWheel={handleWheel}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onBoxPointerDown={handleBoxPointerDown}
-          onBoxResizePointerDown={handleBoxResizePointerDown}
-          onDevicePointerDown={handleDevicePointerDown}
-          onDeviceDoubleClick={handleDeviceDoubleClick}
-          onBoxDoubleClick={handleBoxDoubleClick}
-          onBoxPointerMove={handleBoxPointerMove}
-          onBoxPointerLeave={handleBoxPointerLeave}
-          onDeleteCable={handleDeleteCable}
-          renderCablePoints={renderCablePoints}
-          renderCableLabelPosition={renderCableLabelPosition}
-          renderBoxLabel={renderBoxLabel}
-          onEditSelected={() => setIsBoxModalOpen(true)}
-          onTogglePartsList={() => setIsPartsListOpen((prev) => !prev)}
-          onToggleComponentDiscount={toggleComponentDiscount}
-          onUpdateComponentCustomerDiscount={updateComponentCustomerDiscount}
-          onToggleComponentActive={toggleComponentActive}
-          onUpdateCableColor={(cableId, updates) => updateCable(cableId, updates)}
-          projectStatus={activeProjectStatus}
-          hideStatusControls={false}
-          onProjectStatusChange={setActiveProjectStatus}
-          partsListOpen={isPartsListOpen}
-          statusOptions={STATUS_OPTIONS}
-          statusLabels={STATUS_LABELS}
-          activeVersion={activeVersion}
-          onSetActiveVersion={(version) => setActiveVersion(version ? { id: version.id, name: version.name, locked: version.locked } : null)}
-          onClearActiveVersion={() => setActiveVersion(null)}
-          authorName={authUser?.name || authUser?.email || ""}
-        />
+        {loadedPanels.canvas ? (
+          <Suspense fallback={LAZY_SECTION_FALLBACK}>
+            <CanvasPage
+              hideCanvas={hideToolbar}
+              isLoading={isDesignLoading}
+              svgRef={svgRef}
+              pan={pan}
+              zoom={zoom}
+              backgroundImage={backgroundImage}
+              boxes={boxes}
+              cables={cables}
+              devices={devices}
+              selectedBoxId={selectedBoxId}
+              selectedDeviceId={selectedDeviceId}
+              draftBox={draftBox}
+              draftCable={draftCable}
+              draftPolyline={draftPolyline}
+              tooltip={tooltip}
+              activeModeLabel={MODES.find((m) => m.id === activeMode)?.label || ""}
+              helpMessage={helpMessage}
+              onCanvasClick={handleCanvasClick}
+              onWheel={handleWheel}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onBoxPointerDown={handleBoxPointerDown}
+              onBoxResizePointerDown={handleBoxResizePointerDown}
+              onDevicePointerDown={handleDevicePointerDown}
+              onDeviceDoubleClick={handleDeviceDoubleClick}
+              onBoxDoubleClick={handleBoxDoubleClick}
+              onBoxPointerMove={handleBoxPointerMove}
+              onBoxPointerLeave={handleBoxPointerLeave}
+              onDeleteCable={handleDeleteCable}
+              renderCablePoints={renderCablePoints}
+              renderCableLabelPosition={renderCableLabelPosition}
+              renderBoxLabel={renderBoxLabel}
+              onTogglePartsList={() => setIsPartsListOpen((prev) => !prev)}
+              onToggleComponentDiscount={toggleComponentDiscount}
+              onUpdateComponentCustomerDiscount={updateComponentCustomerDiscount}
+              onToggleComponentActive={toggleComponentActive}
+              onUpdateCableColor={(cableId, updates) => updateCable(cableId, updates)}
+              partsListOpen={isPartsListOpen}
+            />
+          </Suspense>
+        ) : null}
 
-      <AppGlobalModals
-        isBoxModalOpen={isBoxModalOpen}
-        selectedBox={selectedBox}
-        componentForm={componentForm}
-        catalog={catalog}
-        onCloseBoxModal={() => setIsBoxModalOpen(false)}
-        onUpdateBoxName={(name) => updateBox(selectedBox.id, { name })}
-        onUpdateBoxZone={(zone) => updateBox(selectedBox.id, { zone })}
-        onComponentFormChange={(updates) => setComponentForm((prev) => ({ ...prev, ...updates }))}
-        onAddComponent={handleAddComponent}
-        onRemoveComponent={removeComponent}
-        onDeleteBox={handleDeleteBox}
-        componentErrors={componentErrors}
-        isBoxNameValid={isBoxNameValid}
-        isCameraModalOpen={isCameraModalOpen}
-        selectedDevice={devices.find((device) => device.id === selectedDeviceId) || null}
-        cameraCatalog={cameraCatalog}
-        cameraCategoryKey={cameraCategoryKey}
-        onCloseCameraModal={() => setIsCameraModalOpen(false)}
-        onUpdateDevice={(updates) =>
-          setDevices((prev) => prev.map((device) => (device.id === selectedDeviceId ? { ...device, ...updates } : device)))
-        }
-        onDeleteDevice={() =>
-          setDevices((prev) => prev.filter((device) => device.id !== selectedDeviceId))
-        }
-        isCableModalOpen={isCableModalOpen}
-        cableForm={cableForm}
-        onCableFormChange={(updates) => setCableForm((prev) => ({ ...prev, ...updates }))}
-        onCloseCableModal={() => setIsCableModalOpen(false)}
-        onSaveCable={handleCableFormSave}
-        cableErrors={cableErrors}
-        isImageModalOpen={isImageModalOpen}
-        backgroundImage={backgroundImage}
-        onCloseImageModal={() => setIsImageModalOpen(false)}
-        onBackgroundUrlChange={setBackgroundImage}
-        onBackgroundFileChange={handleBackgroundFile}
-      />
+      {hasGlobalModalOpen ? (
+        <Suspense fallback={LAZY_SECTION_FALLBACK}>
+          <AppGlobalModals
+            isBoxModalOpen={isBoxModalOpen}
+            selectedBox={selectedBox}
+            componentForm={componentForm}
+            catalog={catalog}
+            onCloseBoxModal={() => setIsBoxModalOpen(false)}
+            onUpdateBoxName={(name) => updateBox(selectedBox.id, { name })}
+            onUpdateBoxZone={(zone) => updateBox(selectedBox.id, { zone })}
+            onComponentFormChange={(updates) => setComponentForm((prev) => ({ ...prev, ...updates }))}
+            onLoadProductPriceHistory={loadProductPriceHistory}
+            onAddComponent={handleAddComponent}
+            onRemoveComponent={removeComponent}
+            onDeleteBox={handleDeleteBox}
+            componentErrors={componentErrors}
+            isBoxNameValid={isBoxNameValid}
+            isCameraModalOpen={isCameraModalOpen}
+            selectedDevice={devices.find((device) => device.id === selectedDeviceId) || null}
+            cameraCatalog={cameraCatalog}
+            cameraCategoryKey={cameraCategoryKey}
+            onCloseCameraModal={() => setIsCameraModalOpen(false)}
+            onUpdateDevice={(updates) =>
+              setDevices((prev) => prev.map((device) => (device.id === selectedDeviceId ? { ...device, ...updates } : device)))
+            }
+            onDeleteDevice={() =>
+              setDevices((prev) => prev.filter((device) => device.id !== selectedDeviceId))
+            }
+            isCableModalOpen={isCableModalOpen}
+            cableForm={cableForm}
+            onCableFormChange={(updates) => setCableForm((prev) => ({ ...prev, ...updates }))}
+            onCloseCableModal={() => setIsCableModalOpen(false)}
+            onSaveCable={handleCableFormSave}
+            cableErrors={cableErrors}
+            isImageModalOpen={isImageModalOpen}
+            backgroundImage={backgroundImage}
+            onCloseImageModal={() => setIsImageModalOpen(false)}
+            onBackgroundUrlChange={setBackgroundImage}
+            onBackgroundFileChange={handleBackgroundFile}
+          />
+        </Suspense>
+      ) : null}
 
       </div>
     </div>

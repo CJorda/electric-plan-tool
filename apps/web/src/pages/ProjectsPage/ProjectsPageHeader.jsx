@@ -1,6 +1,7 @@
+import { memo } from "react";
 import CustomSelect from "../../components/ui/CustomSelect.jsx";
 
-export default function ProjectsPageHeader({
+function ProjectsPageHeader({
   quickFilter,
   onQuickFilterChange,
   statusFilter,
@@ -9,6 +10,8 @@ export default function ProjectsPageHeader({
   onOpenCreate,
   onExportCsv,
 }) {
+  "use memo";
+
   return (
     <>
       <div className="projects__header">
@@ -64,3 +67,5 @@ export default function ProjectsPageHeader({
     </>
   );
 }
+
+export default memo(ProjectsPageHeader);

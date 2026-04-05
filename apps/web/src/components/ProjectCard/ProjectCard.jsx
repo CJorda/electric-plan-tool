@@ -32,7 +32,7 @@ const calcVersionTotal = (version) => {
   return componentsTotal + devicesTotal + cablesTotal;
 };
 
-export default function ProjectCard({
+function ProjectCard({
   project,
   total,
   onDelete,
@@ -51,6 +51,8 @@ export default function ProjectCard({
   onAcceptVersion,
   hideStatusControls = false,
 }) {
+  "use memo";
+
   const sortedVersions = useMemo(
     () => [...versions].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
     [versions]
@@ -111,3 +113,5 @@ export default function ProjectCard({
     </div>
   );
 }
+
+export default React.memo(ProjectCard);

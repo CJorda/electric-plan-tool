@@ -1,8 +1,8 @@
-import React from 'react';
+import { memo } from 'react';
 import ProjectCard from '../ProjectCard/ProjectCard.jsx';
 import { STATUS_OPTIONS } from '../../constants/projectStatus';
 
-export default function ProjectList({
+function ProjectList({
   projects,
   totals = {},
   onOpen,
@@ -23,6 +23,8 @@ export default function ProjectList({
   onStatusChange,
   hideStatusControls = false,
 }) {
+  "use memo";
+
   if (!projects || projects.length === 0) return <div className="projects__placeholder">No hay proyectos.</div>;
   return (
     <div className="projects__list">
@@ -54,3 +56,5 @@ export default function ProjectList({
     </div>
   );
 }
+
+export default memo(ProjectList);

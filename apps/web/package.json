@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:profile": "vite --profile",
+    "dev:debug:transform": "vite --debug transform",
+    "dev:debug:plugin-transform": "vite --debug plugin-transform",
     "build": "vite build",
+    "build:prod": "vite build --mode production",
+    "measure:prod": "pnpm run build:prod",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -17,9 +22,11 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@rolldown/plugin-babel": "^0.2.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^10.1.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
