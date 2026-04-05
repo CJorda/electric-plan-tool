@@ -3,6 +3,15 @@ import ProjectCardInfoPanel from './ProjectCardInfoPanel.jsx';
 import ProjectCardVersionsPanel from './ProjectCardVersionsPanel.jsx';
 
 const calcVersionTotal = (version) => {
+  const rawStoredTotal =
+    version?.snapshot?.pricing?.totalBudget ??
+    version?.snapshot?.design?.pricing?.totalBudget ??
+    version?.snapshot?.totalBudget;
+  const storedTotal = Number(rawStoredTotal);
+  if (Number.isFinite(storedTotal)) {
+    return storedTotal;
+  }
+
   const design = version?.snapshot?.design || version?.snapshot || {};
   const boxes = Array.isArray(design.boxes) ? design.boxes : [];
   const cables = Array.isArray(design.cables) ? design.cables : [];
@@ -36,8 +45,10 @@ export default function ProjectCard({
   versions = [],
   versionsOpen = false,
   versionsLoading = false,
+  selectedVersionId = null,
   onToggleVersions,
   onSelectVersion,
+  onAcceptVersion,
   hideStatusControls = false,
 }) {
   const sortedVersions = useMemo(
@@ -82,6 +93,7 @@ export default function ProjectCard({
             project={project}
             versionsLoading={versionsLoading}
             sortedVersions={sortedVersions}
+            selectedVersionId={selectedVersionId}
             editingVersionId={editingVersionId}
             editingName={editingName}
             setEditingName={setEditingName}
@@ -89,6 +101,7 @@ export default function ProjectCard({
             onCancelRename={cancelRename}
             onRenameVersion={onRenameVersion}
             onSelectVersion={onSelectVersion}
+            onAcceptVersion={onAcceptVersion}
             onDuplicateVersion={onDuplicateVersion}
             onRequestDeleteVersion={onRequestDeleteVersion}
             calcVersionTotal={calcVersionTotal}

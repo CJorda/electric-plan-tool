@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import CustomSelect from "../ui/CustomSelect.jsx";
+import { CheckCircle2, ChevronDown, Download, FileText, History, List } from 'lucide-react';
 import { apiFetch } from '../../lib/api.js';
 import { toastError, toastInfo, toastSuccess } from '../../lib/toast.js';
 import QuoteAcceptModal from './QuoteAcceptModal.jsx';
@@ -7,11 +7,10 @@ import QuoteRevisionModal from './QuoteRevisionModal.jsx';
 
 export default function QuoteActions({
   projectId,
-  projectStatus,
-  statusOptions = [],
   onStatusChange,
-  hideStatusControls = false,
+  onTogglePartsList,
   designSnapshot,
+  snapshotPricing,
   onRestoreDesign,
   onSetActiveVersion,
   onClearActiveVersion,
@@ -24,10 +23,8 @@ export default function QuoteActions({
   const [isRevisionOpen, setIsRevisionOpen] = useState(false);
   const [revisionLoading, setRevisionLoading] = useState(false);
   const [revisions, setRevisions] = useState([]);
-  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
-  const exportMenuRef = useRef(null);
-  const moreMenuRef = useRef(null);
+  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+  const actionsMenuRef = useRef(null);
 
   const exportMaterialsCsv = async () => {
     if (!projectId || projectId.startsWith('local-')) {
@@ -126,34 +123,34 @@ export default function QuoteActions({
 
   useEffect(() => {
     const handleOutside = (event) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
-        setIsExportMenuOpen(false);
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target)) {
+        setIsActionsMenuOpen(false);
       }
-      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
-        setIsMoreMenuOpen(false);
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsActionsMenuOpen(false);
       }
     };
 
     document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
   const openRevisionModal = () => {
     setIsRevisionOpen(true);
-    setIsMoreMenuOpen(false);
+    setIsActionsMenuOpen(false);
     loadRevisions();
   };
 
-  const handleExportPdf = async () => {
-    setIsExportMenuOpen(false);
-    await exportPdf();
-  };
-
-  const handleExportMaterials = async () => {
-    setIsExportMenuOpen(false);
-    await exportMaterialsCsv();
+  const runMenuAction = async (action) => {
+    setIsActionsMenuOpen(false);
+    await action?.();
   };
 
   const createRevision = async ({ name, notes, status, locked } = {}) => {
@@ -167,7 +164,11 @@ export default function QuoteActions({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          snapshot: { design: designSnapshot, createdAt: new Date().toISOString() },
+          snapshot: {
+            design: designSnapshot,
+            pricing: snapshotPricing || undefined,
+            createdAt: new Date().toISOString(),
+          },
           name,
           notes,
           status,
@@ -209,64 +210,61 @@ export default function QuoteActions({
 
   return (
     <div className="quote-actions">
-      <div className="quote-actions__menu" ref={exportMenuRef}>
+      <div className="quote-actions__menu" ref={actionsMenuRef}>
         <button
-          className="canvas__export quote-actions__menu-button"
+          className={`toolbar__button toolbar__menu-trigger quote-actions__menu-button ${
+            isActionsMenuOpen ? 'is-active' : ''
+          }`}
           type="button"
           aria-haspopup="menu"
-          aria-expanded={isExportMenuOpen}
+          aria-expanded={isActionsMenuOpen}
           onClick={() => {
-            setIsExportMenuOpen((prev) => !prev);
-            setIsMoreMenuOpen(false);
+            setIsActionsMenuOpen((prev) => !prev);
           }}
         >
-          Exportar
+          Acciones
+          <ChevronDown className={`toolbar__menu-chevron${isActionsMenuOpen ? ' is-open' : ''}`} size={16} />
         </button>
-        {isExportMenuOpen && (
-          <div className="quote-actions__dropdown" role="menu" aria-label="Opciones de exportación">
-            <button className="quote-actions__menu-item" type="button" onClick={handleExportPdf}>
-              Presupuesto (PDF)
-            </button>
-            <button className="quote-actions__menu-item" type="button" onClick={handleExportMaterials}>
-              Materiales (CSV)
-            </button>
-          </div>
-        )}
-      </div>
+        {isActionsMenuOpen && (
+          <div className="quote-actions__dropdown" role="menu" aria-label="Acciones del proyecto">
+            {onTogglePartsList && (
+              <button className="quote-actions__menu-item" type="button" role="menuitem" onClick={() => runMenuAction(onTogglePartsList)}>
+                <List size={15} className="quote-actions__menu-item-icon" />
+                Listado de piezas
+              </button>
+            )}
 
-      <div className="quote-actions__menu" ref={moreMenuRef}>
-        <button
-          className="canvas__edit quote-actions__menu-button"
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={isMoreMenuOpen}
-          onClick={() => {
-            setIsMoreMenuOpen((prev) => !prev);
-            setIsExportMenuOpen(false);
-          }}
-        >
-          Más
-        </button>
-        {isMoreMenuOpen && (
-          <div className="quote-actions__dropdown" role="menu" aria-label="Más opciones">
-            <button className="quote-actions__menu-item" type="button" onClick={openRevisionModal}>
+            <button className="quote-actions__menu-item" type="button" role="menuitem" onClick={() => runMenuAction(exportPdf)}>
+              <FileText size={15} className="quote-actions__menu-item-icon" />
+              Exportar presupuesto (PDF)
+            </button>
+            <button className="quote-actions__menu-item" type="button" role="menuitem" onClick={() => runMenuAction(exportMaterialsCsv)}>
+              <Download size={15} className="quote-actions__menu-item-icon" />
+              Exportar materiales (CSV)
+            </button>
+            <button className="quote-actions__menu-item" type="button" role="menuitem" onClick={openRevisionModal}>
+              <History size={15} className="quote-actions__menu-item-icon" />
               Historial{revisions.length > 0 ? ` (${revisions.length})` : ''}
             </button>
+
+            <div className="quote-actions__menu-separator" />
+            <button
+              className="quote-actions__menu-item quote-actions__menu-item--accent"
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setIsActionsMenuOpen(false);
+                setAcceptState('idle');
+                setIsAcceptOpen(true);
+              }}
+            >
+              <CheckCircle2 size={15} className="quote-actions__menu-item-icon" />
+              Marcar como aceptado
+            </button>
           </div>
         )}
       </div>
 
-      {!hideStatusControls && (
-        <label className="projects__status-select quote-actions__status">
-          <CustomSelect
-            value={projectStatus}
-            options={statusOptions.map((option) => ({ value: option.value, label: option.label }))}
-            onChange={onStatusChange}
-            className="projects__status-select-control"
-          />
-        </label>
-      )}
-      <button className="canvas__edit" type="button" onClick={() => { setAcceptState('idle'); setIsAcceptOpen(true); }}>Marcar como aceptado</button>
       <QuoteRevisionModal
         open={isRevisionOpen}
         onClose={() => setIsRevisionOpen(false)}

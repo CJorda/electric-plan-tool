@@ -4,6 +4,7 @@ export default function ProjectCardVersionsPanel({
   project,
   versionsLoading,
   sortedVersions,
+  selectedVersionId,
   editingVersionId,
   editingName,
   setEditingName,
@@ -11,6 +12,7 @@ export default function ProjectCardVersionsPanel({
   onCancelRename,
   onRenameVersion,
   onSelectVersion,
+  onAcceptVersion,
   onDuplicateVersion,
   onRequestDeleteVersion,
   calcVersionTotal,
@@ -23,6 +25,12 @@ export default function ProjectCardVersionsPanel({
     return <div className="projects__versions-empty">Aún no hay versiones.</div>;
   }
 
+  const submitRename = (project, version, name) => {
+    if (!name.trim()) return;
+    onRenameVersion?.(project, version, name.trim());
+    onCancelRename();
+  };
+
   return (
     <div className="projects__versions-list">
       {sortedVersions.map((version) => (
@@ -34,38 +42,27 @@ export default function ProjectCardVersionsPanel({
                   value={editingName}
                   onChange={(event) => setEditingName(event.target.value)}
                   placeholder="Nombre de la versión"
-                />
-                <div className="projects__version-edit-actions">
-                  <button
-                    type="button"
-                    className="projects__version-rename"
-                    onClick={() => {
-                      if (!editingName.trim()) return;
-                      onRenameVersion?.(project, version, editingName.trim());
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      submitRename(project, version, editingName);
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
                       onCancelRename();
-                    }}
-                  >
-                    Guardar
-                  </button>
-                  <button
-                    type="button"
-                    className="projects__version-cancel"
-                    onClick={onCancelRename}
-                  >
-                    Cancelar
-                  </button>
-                </div>
+                    }
+                  }}
+                />
               </div>
             ) : (
-              <strong>{version.name || "Versión"}</strong>
+              <div className="projects__version-title">
+                <strong>{version.name || "Versión"}</strong>
+                {selectedVersionId === version.id && (
+                  <span className="projects__version-active">Buena</span>
+                )}
+              </div>
             )}
-            <div className="projects__version-meta">
-              {new Date(version.createdAt).toLocaleString()}
-              {version.author ? ` · ${version.author}` : ""}
-              {version.status ? ` · ${version.status}` : ""}
-              {version.locked ? " · bloqueada" : ""}
-            </div>
-            {version.notes && <div className="projects__version-notes">{version.notes}</div>}
+            <div className="projects__version-meta">{new Date(version.createdAt).toLocaleString()}</div>
           </div>
           <div className="projects__version-total">Total: €{calcVersionTotal(version).toFixed(2)}</div>
           <div className="projects__version-actions">
@@ -76,6 +73,13 @@ export default function ProjectCardVersionsPanel({
               onClick={() => onSelectVersion?.(project, version)}
             >
               Abrir editor
+            </button>
+            <button
+              type="button"
+              className={`projects__version-accept${selectedVersionId === version.id ? " is-active" : ""}`}
+              onClick={() => onAcceptVersion?.(project, version)}
+            >
+              {selectedVersionId === version.id ? "Aceptada" : "Aceptar"}
             </button>
             <button type="button" className="projects__version-rename" onClick={() => onStartRename(version)}>
               Renombrar

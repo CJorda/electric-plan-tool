@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './ProjectsPage.css';
 import useProjects from '../../hooks/useProjects.js';
 import ProjectDeleteModal from '../../components/ProjectDeleteModal/ProjectDeleteModal.jsx';
@@ -13,11 +13,49 @@ import { buildFilteredProjects, downloadProjectsCsv, formatBytes, readFileAsData
 import { createProjectRecord } from './projectsPageCreate.js';
 import { STATUS_OPTIONS } from '../../constants/projectStatus';
 
+const calcVersionTotal = (version) => {
+  const rawStoredTotal =
+    version?.snapshot?.pricing?.totalBudget ??
+    version?.snapshot?.design?.pricing?.totalBudget ??
+    version?.snapshot?.totalBudget;
+  const storedTotal = Number(rawStoredTotal);
+  if (Number.isFinite(storedTotal)) {
+    return storedTotal;
+  }
+
+  const design = version?.snapshot?.design || version?.snapshot || {};
+  const boxes = Array.isArray(design.boxes) ? design.boxes : [];
+  const cables = Array.isArray(design.cables) ? design.cables : [];
+  const devices = Array.isArray(design.devices) ? design.devices : [];
+  const componentsTotal = boxes.reduce((sum, box) => {
+    return sum + (box.components || []).reduce((inner, component) => {
+      const quantity = Number(component.quantity) || 1;
+      const unit = Number(component.unitPrice) || 0;
+      const total = Number(component.total) || unit * quantity;
+      return inner + total;
+    }, 0);
+  }, 0);
+  const devicesTotal = devices.reduce(
+    (sum, device) => sum + (Number(device.total) || Number(device.unitPrice) || 0),
+    0
+  );
+  const cablesTotal = cables.reduce((sum, cable) => sum + (Number(cable.totalPrice) || 0), 0);
+  return componentsTotal + devicesTotal + cablesTotal;
+};
+
 function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onProjectCreated, hideStatusControls = false, authToken = '', clients = [] }) {
   const apiEnabled = import.meta.env.VITE_API_ENABLED === 'true';
-  const [projectTotals] = useState(() => {
+  const [projectTotals, setProjectTotals] = useState(() => {
     try {
       const s = localStorage.getItem('projectTotals');
+      return s ? JSON.parse(s) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [selectedVersionsByProject, setSelectedVersionsByProject] = useState(() => {
+    try {
+      const s = localStorage.getItem('projectActiveVersions');
       return s ? JSON.parse(s) : {};
     } catch {
       return {};
@@ -39,6 +77,12 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
   const [quickFilter, setQuickFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  useEffect(() => {
+    if (!isProjectsSection) return;
+    setQuickFilter('all');
+    setStatusFilter('all');
+  }, [isProjectsSection]);
+
   const filteredProjects = useMemo(() => {
     return buildFilteredProjects({
       projects,
@@ -59,6 +103,49 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
     setConfirmProject(project);
   };
 
+  const setProjectTotalForVersion = (projectId, version) => {
+    if (!projectId || !version) return;
+    const nextTotal = Number(calcVersionTotal(version)) || 0;
+    setProjectTotals((prev) => {
+      const next = { ...prev, [projectId]: nextTotal };
+      try {
+        localStorage.setItem('projectTotals', JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const setAcceptedVersion = (projectId, version) => {
+    if (!projectId) return;
+    setSelectedVersionsByProject((prev) => {
+      const next = { ...prev };
+      if (version?.id) {
+        next[projectId] = {
+          id: version.id,
+          name: version.name || '',
+          locked: Boolean(version.locked),
+        };
+      } else {
+        delete next[projectId];
+      }
+      try {
+        localStorage.setItem('projectActiveVersions', JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const handleAcceptVersion = (project, version) => {
+    if (!project || !version) return;
+    setAcceptedVersion(project.id, version);
+    setProjectTotalForVersion(project.id, version);
+    toastSuccess('Versión aceptada para este proyecto.');
+  };
+
   const handleToggleVersions = async (project) => {
     if (!project) return;
     setVersionsOpenByProject((prev) => ({ ...prev, [project.id]: !prev[project.id] }));
@@ -68,7 +155,15 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
       const res = await apiFetch(`/api/projects/${project.id}/versions`, {}, authToken);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setVersionsByProject((prev) => ({ ...prev, [project.id]: data.versions || [] }));
+      const versions = data.versions || [];
+      setVersionsByProject((prev) => ({ ...prev, [project.id]: versions }));
+      const selectedVersionId = selectedVersionsByProject[project.id]?.id;
+      if (selectedVersionId) {
+        const selectedVersion = versions.find((version) => version.id === selectedVersionId);
+        if (selectedVersion) {
+          setProjectTotalForVersion(project.id, selectedVersion);
+        }
+      }
     } catch (error) {
       console.error('Failed to load versions', error);
       toastError('No se pudieron cargar las versiones.');
@@ -139,10 +234,18 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
   const handleDeleteVersion = async (project, version) => {
     if (!project || !version) return;
     if (!apiEnabled) {
+      const nextVersions = (versionsByProject[project.id] || []).filter((item) => item.id !== version.id);
       setVersionsByProject((prev) => ({
         ...prev,
-        [project.id]: (prev[project.id] || []).filter((item) => item.id !== version.id),
+        [project.id]: nextVersions,
       }));
+      if (selectedVersionsByProject[project.id]?.id === version.id) {
+        const fallbackVersion = nextVersions[0] || null;
+        setAcceptedVersion(project.id, fallbackVersion);
+        if (fallbackVersion) {
+          setProjectTotalForVersion(project.id, fallbackVersion);
+        }
+      }
       return;
     }
     try {
@@ -150,10 +253,18 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
         method: 'DELETE',
       }, authToken);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const nextVersions = (versionsByProject[project.id] || []).filter((item) => item.id !== version.id);
       setVersionsByProject((prev) => ({
         ...prev,
-        [project.id]: (prev[project.id] || []).filter((item) => item.id !== version.id),
+        [project.id]: nextVersions,
       }));
+      if (selectedVersionsByProject[project.id]?.id === version.id) {
+        const fallbackVersion = nextVersions[0] || null;
+        setAcceptedVersion(project.id, fallbackVersion);
+        if (fallbackVersion) {
+          setProjectTotalForVersion(project.id, fallbackVersion);
+        }
+      }
       setProjects((prev) =>
         prev.map((item) =>
           item.id === project.id
@@ -181,6 +292,9 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
           item.id === version.id ? { ...item, name } : item
         ),
       }));
+      if (selectedVersionsByProject[project.id]?.id === version.id) {
+        setAcceptedVersion(project.id, { ...version, name });
+      }
       return;
     }
     try {
@@ -201,6 +315,9 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
           item.id === version.id ? { ...item, name: updated.name } : item
         ),
       }));
+      if (selectedVersionsByProject[project.id]?.id === version.id) {
+        setAcceptedVersion(project.id, { ...version, name: updated.name, locked: updated.locked });
+      }
     } catch (error) {
       console.error('Failed to rename version', error);
       toastError('No se pudo renombrar la versión.');
@@ -407,6 +524,10 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
           [createdProject.id]: createdVersion ? [createdVersion] : [],
         }));
         setVersionsOpenByProject((prev) => ({ ...prev, [createdProject.id]: true }));
+        if (createdVersion) {
+          setAcceptedVersion(createdProject.id, createdVersion);
+          setProjectTotalForVersion(createdProject.id, createdVersion);
+        }
       }
 
       setProjects((prev) => [createdProject, ...prev]);
@@ -436,6 +557,7 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
       />
 
       <ProjectsPageContent
+        projectsCount={projects.length}
         filteredProjects={filteredProjects}
         error={error}
         isLoading={isLoading}
@@ -451,8 +573,10 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
         versionsByProject={versionsByProject}
         versionsOpenByProject={versionsOpenByProject}
         versionsLoadingByProject={versionsLoadingByProject}
+        selectedVersionsByProject={selectedVersionsByProject}
         onToggleVersions={handleToggleVersions}
         onSelectVersion={handleSelectVersion}
+        onAcceptVersion={handleAcceptVersion}
         onStatusChange={handleStatusChange}
         hideStatusControls={hideStatusControls}
       />

@@ -1,7 +1,8 @@
 export default function CatalogLoadingState({
   isCatalogUnifiedSection,
   isMarginsSection,
-  isProvidersAndManufacturersSection,
+  isProvidersSection,
+  isManufacturersSection,
 }) {
   return (
     <section className="catalog">
@@ -40,7 +41,7 @@ export default function CatalogLoadingState({
             </section>
           )}
 
-          {isProvidersAndManufacturersSection && (
+          {(isProvidersSection || isManufacturersSection) && (
             <section className="catalog__skeleton-section">
               <div className="catalog__skeleton-header">
                 <div className="catalog__skeleton-title skeleton" />

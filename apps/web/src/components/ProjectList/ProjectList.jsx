@@ -16,8 +16,10 @@ export default function ProjectList({
   versionsByProject = {},
   versionsOpenByProject = {},
   versionsLoadingByProject = {},
+  selectedVersionsByProject = {},
   onToggleVersions,
   onSelectVersion,
+  onAcceptVersion,
   onStatusChange,
   hideStatusControls = false,
 }) {
@@ -33,6 +35,7 @@ export default function ProjectList({
           versions={versionsByProject[p.id] || []}
           versionsOpen={Boolean(versionsOpenByProject[p.id])}
           versionsLoading={Boolean(versionsLoadingByProject[p.id])}
+          selectedVersionId={selectedVersionsByProject[p.id]?.id || null}
           statusOptions={STATUS_OPTIONS}
           onOpen={onOpen}
           onDelete={onDelete}
@@ -43,6 +46,7 @@ export default function ProjectList({
           onRenameProject={onRenameProject}
           onToggleVersions={onToggleVersions}
           onSelectVersion={onSelectVersion}
+          onAcceptVersion={onAcceptVersion}
           onStatusChange={onStatusChange}
           hideStatusControls={hideStatusControls}
         />

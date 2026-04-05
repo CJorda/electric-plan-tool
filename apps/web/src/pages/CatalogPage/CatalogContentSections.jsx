@@ -5,7 +5,8 @@ import ProvidersSection from "../../components/ProvidersSection/ProvidersSection
 
 export default function CatalogContentSections({
   isCatalogUnifiedSection,
-  isProvidersAndManufacturersSection,
+  isProvidersSection,
+  isManufacturersSection,
   isPricingRulesSection,
   authToken,
   productCategoryOptions,
@@ -81,25 +82,26 @@ export default function CatalogContentSections({
             />
           )}
 
-          {isProvidersAndManufacturersSection && (
-            <>
-              <ProvidersSection
-                providers={providers}
-                providerForm={providerForm}
-                onProviderFormChange={onProviderFormChange}
-                onAddProvider={onAddProvider}
-                onUpdateProvider={onUpdateProvider}
-                onDeleteProvider={onDeleteProvider}
-              />
-              <ManufacturersSection
-                manufacturers={manufacturers}
-                manufacturerForm={manufacturerForm}
-                onManufacturerFormChange={onManufacturerFormChange}
-                onAddManufacturer={onAddManufacturer}
-                onUpdateManufacturer={onUpdateManufacturer}
-                onDeleteManufacturer={onDeleteManufacturer}
-              />
-            </>
+          {isProvidersSection && (
+            <ProvidersSection
+              providers={providers}
+              providerForm={providerForm}
+              onProviderFormChange={onProviderFormChange}
+              onAddProvider={onAddProvider}
+              onUpdateProvider={onUpdateProvider}
+              onDeleteProvider={onDeleteProvider}
+            />
+          )}
+
+          {isManufacturersSection && (
+            <ManufacturersSection
+              manufacturers={manufacturers}
+              manufacturerForm={manufacturerForm}
+              onManufacturerFormChange={onManufacturerFormChange}
+              onAddManufacturer={onAddManufacturer}
+              onUpdateManufacturer={onUpdateManufacturer}
+              onDeleteManufacturer={onDeleteManufacturer}
+            />
           )}
 
           {isPricingRulesSection && (

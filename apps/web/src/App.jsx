@@ -322,6 +322,41 @@ function App() {
     if (!activeProjectId) return;
     const timeout = setTimeout(() => {
       if (activeVersion?.locked) return;
+      const marginByCategory = new Map();
+      (margins || []).forEach((margin) => {
+        const category = margin?.categoryName;
+        const percent = Number(margin?.marginPercent) || 0;
+        if (!category) return;
+        const current = marginByCategory.get(category) ?? 0;
+        if (percent > current) marginByCategory.set(category, percent);
+      });
+
+      const snapshotComponentsTotal = boxes.reduce((sum, box) => {
+        return sum + (box.components || []).reduce((componentSum, component) => {
+          const quantity = Number(component.quantity) || 1;
+          const unit = Number(component.unitPrice) || 0;
+          const base = Number(component.total);
+          return componentSum + (Number.isFinite(base) ? base : unit * quantity);
+        }, 0);
+      }, 0);
+      const snapshotMarginTotal = boxes.reduce((sum, box) => {
+        return sum + (box.components || []).reduce((componentSum, component) => {
+          const category = component.category || "";
+          const percent = marginByCategory.get(category) || 0;
+          const quantity = Number(component.quantity) || 1;
+          const unit = Number(component.unitPrice) || 0;
+          const base = Number(component.total);
+          const componentBase = Number.isFinite(base) ? base : unit * quantity;
+          return componentSum + componentBase * (percent / 100);
+        }, 0);
+      }, 0);
+      const snapshotCablesTotal = cables.reduce((sum, cable) => sum + (Number(cable.totalPrice) || 0), 0);
+      const snapshotDevicesTotal = devices.reduce(
+        (sum, device) => sum + (Number(device.total) || Number(device.unitPrice) || 0),
+        0
+      );
+      const snapshotTotalBudget = snapshotComponentsTotal + snapshotCablesTotal + snapshotMarginTotal;
+
       apiFetch(`/api/projects/${activeProjectId}/design`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -333,14 +368,25 @@ function App() {
         apiFetch(`/api/projects/${activeProjectId}/versions/${activeVersion.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot: { design: { boxes, cables, devices, cableTypes } } }),
+          body: JSON.stringify({
+            snapshot: {
+              design: { boxes, cables, devices, cableTypes },
+              pricing: {
+                componentsTotal: snapshotComponentsTotal,
+                cablesTotal: snapshotCablesTotal,
+                devicesTotal: snapshotDevicesTotal,
+                marginTotal: snapshotMarginTotal,
+                totalBudget: snapshotTotalBudget,
+              },
+            },
+          }),
         }, accessToken).catch(() => {
           // ignore
         });
       }
     }, 500);
     return () => clearTimeout(timeout);
-  }, [activeProjectId, boxes, cables, devices, cableTypes, accessToken, activeVersion]);
+  }, [activeProjectId, boxes, cables, devices, cableTypes, margins, accessToken, activeVersion]);
 
   const restoreDesign = useCallback(async (design) => {
     const nextBoxes = Array.isArray(design?.boxes) ? design.boxes : [];
@@ -532,7 +578,7 @@ function App() {
       {
         title: "Catálogo",
         icon: Package,
-        items: ["Productos", "Proveedores y fabricantes", "Reglas de precio"],
+        items: ["Productos", "Proveedores", "Fabricantes", "Reglas de precio"],
       },
       {
         title: "Clientes",
@@ -573,9 +619,9 @@ function App() {
   const isDashboardSection = activeSection === "Inicio";
   const isProductsSection = activeSection === "Catálogo" && activeSubsection === "Productos";
   const isCategoriesSection = activeSection === "Catálogo" && activeSubsection === "Categorías";
-  const isProvidersSection = activeSection === "Catálogo" && activeSubsection === "Proveedores y fabricantes";
+  const isProvidersSection = activeSection === "Catálogo" && activeSubsection === "Proveedores";
   const isMarginsSection = activeSection === "Catálogo" && activeSubsection === "Reglas de precio";
-  const isManufacturersSection = activeSection === "Catálogo" && activeSubsection === "Proveedores y fabricantes";
+  const isManufacturersSection = activeSection === "Catálogo" && activeSubsection === "Fabricantes";
   const isProjectsSection = activeSection === "Proyectos";
   const isClientsSection = activeSection === "Clientes";
   const isOperationsSection = activeSection === "Operaciones";
@@ -617,6 +663,15 @@ function App() {
         setIsProjectDesignMode(true);
         setIsPartsListOpen(false);
       }});
+      items.push({
+        label: activeVersion?.name
+          ? `Versión: ${activeVersion.name}${activeVersion.locked ? " (bloqueada)" : ""}`
+          : "Versión: sin seleccionar",
+        onClick: () => {
+          setIsProjectDesignMode(true);
+          setIsPartsListOpen(false);
+        },
+      });
       if (isPartsListOpen) {
         items.push({ label: "Listado de piezas", onClick: () => setIsPartsListOpen(true) });
       }
@@ -631,7 +686,7 @@ function App() {
       }});
     }
     return items;
-  }, [activeSection, activeSubsection, isProjectDesignMode, isPartsListOpen, sidebarSections]);
+  }, [activeSection, activeSubsection, isProjectDesignMode, isPartsListOpen, sidebarSections, activeVersion]);
 
   const helpMessage = useMemo(() => {
     if (activeMode === "addCable") return "Selecciona un cuadro de origen y destino para añadir el cable.";
@@ -675,6 +730,10 @@ function App() {
     );
   }, 0);
   const cablesTotal = cables.reduce((sum, cable) => sum + (Number(cable.totalPrice) || 0), 0);
+  const devicesTotal = devices.reduce(
+    (sum, device) => sum + (Number(device.total) || Number(device.unitPrice) || 0),
+    0
+  );
   const totalBudget = boxesTotal + cablesTotal + marginTotal;
 
   useEffect(() => {
@@ -972,6 +1031,13 @@ function App() {
           onLogout={logout}
         />
         <div className="main">
+        <AppBreadcrumb
+          breadcrumbItems={breadcrumbItems}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
+          onCloseSidebar={() => setIsSidebarCollapsed(true)}
+        />
+
         <Toolbar
           visible={isProjectDesignMode}
           zoom={zoom}
@@ -982,6 +1048,29 @@ function App() {
           onReset={resetView}
           onOpenImage={() => setIsImageModalOpen(true)}
           onOpenCableTypes={openCableTypesEditor}
+          projectActions={{
+            projectId: activeProjectId,
+            projectStatus: activeProjectStatus,
+            statusOptions: STATUS_OPTIONS,
+            onStatusChange: setActiveProjectStatus,
+            onTogglePartsList: () => setIsPartsListOpen((prev) => !prev),
+            hideStatusControls: false,
+            designSnapshot: { boxes, cables, devices, cableTypes },
+            snapshotPricing: {
+              componentsTotal: boxesTotal,
+              cablesTotal,
+              devicesTotal,
+              marginTotal,
+              totalBudget,
+            },
+            onRestoreDesign: restoreDesign,
+            onSetActiveVersion: (version) =>
+              setActiveVersion(version ? { id: version.id, name: version.name, locked: version.locked } : null),
+            onClearActiveVersion: () => setActiveVersion(null),
+            activeVersionId: activeVersion?.id || null,
+            authToken: accessToken,
+            authorName: authUser?.name || authUser?.email || "",
+          }}
           totals={{ total: totalBudget, boxes: boxesTotal, cables: cablesTotal }}
         />
 
@@ -1001,12 +1090,6 @@ function App() {
             });
             setActiveMode("addCable");
           }}
-        />
-        <AppBreadcrumb
-          breadcrumbItems={breadcrumbItems}
-          isSidebarCollapsed={isSidebarCollapsed}
-          onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
-          onCloseSidebar={() => setIsSidebarCollapsed(true)}
         />
         <Toolbar
           visible={!hideToolbar && !isProjectDesignMode}
@@ -1140,6 +1223,13 @@ function App() {
           projectId={activeProjectId}
           authToken={accessToken}
           designSnapshot={{ boxes, cables, devices, cableTypes }}
+          snapshotPricing={{
+            componentsTotal: boxesTotal,
+            cablesTotal,
+            devicesTotal,
+            marginTotal,
+            totalBudget,
+          }}
           onRestoreDesign={restoreDesign}
           svgRef={svgRef}
           pan={pan}

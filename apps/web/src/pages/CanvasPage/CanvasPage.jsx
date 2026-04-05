@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import "./CanvasPage.css";
 import CanvasStage from "../../components/CanvasStage/CanvasStage.jsx";
-import CanvasEditorHeader from "./CanvasEditorHeader.jsx";
 import CanvasPartsListView from "./CanvasPartsListView.jsx";
 import { buildGroupedRows, exportBomCsv } from "./canvasPartsUtils.js";
 
@@ -52,6 +51,7 @@ function CanvasPage({
   onProjectStatusChange,
   statusOptions,
   projectId,
+  snapshotPricing,
   onRestoreDesign,
 }) {
   const [openBoxes, setOpenBoxes] = useState({});
@@ -96,21 +96,6 @@ function CanvasPage({
 
   return (
     <div className="canvas__editor">
-      <CanvasEditorHeader
-        hideStatusControls={hideStatusControls}
-        projectStatus={projectStatus}
-        onTogglePartsList={onTogglePartsList}
-        projectId={projectId}
-        statusOptions={statusOptions}
-        onProjectStatusChange={onProjectStatusChange}
-        boxes={boxes}
-        cables={cables}
-        cableTypes={cableTypes}
-        devices={devices}
-        onRestoreDesign={onRestoreDesign}
-        authToken={authToken}
-      />
-
       <CanvasStage
         svgRef={svgRef}
         pan={pan}

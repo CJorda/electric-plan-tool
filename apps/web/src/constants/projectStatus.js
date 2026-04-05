@@ -1,14 +1,14 @@
 export const STATUS_OPTIONS = [
-  { value: 'draft', label: 'borrador' },
-  { value: 'confirmed', label: 'confirmado' },
-  { value: 'published', label: 'publicado' },
-  { value: 'archived', label: 'archivado' },
+  { value: 'draft', label: 'Borrador' },
+  { value: 'confirmed', label: 'Confirmado' },
+  { value: 'published', label: 'Publicado' },
+  { value: 'archived', label: 'Archivado' },
 ];
 
 export const STATUS_LABELS = {
-  draft: 'borrador',
-  confirmed: 'confirmado',
-  published: 'publicado',
-  archived: 'archivado',
-  local: 'local',
+  draft: 'Borrador',
+  confirmed: 'Confirmado',
+  published: 'Publicado',
+  archived: 'Archivado',
+  local: 'Local',
 };

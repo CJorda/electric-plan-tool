@@ -38,6 +38,7 @@ export default function ProvidersSection({
           <span>Contacto</span>
           <span>Email</span>
           <span>Teléfono</span>
+          <span>Web</span>
           <span>Notas</span>
           <span />
         </div>

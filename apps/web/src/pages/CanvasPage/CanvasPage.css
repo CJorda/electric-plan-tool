@@ -41,15 +41,14 @@
 }
 
 .quote-actions__menu-button {
-	min-width: 92px;
-	text-align: center;
+	min-width: 128px;
 }
 
 .quote-actions__dropdown {
 	position: absolute;
 	top: calc(100% + 8px);
-	right: 0;
-	min-width: 190px;
+	left: 0;
+	min-width: 240px;
 	display: grid;
 	gap: 4px;
 	padding: 8px;
@@ -61,20 +60,55 @@
 }
 
 .quote-actions__menu-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
 	background: transparent;
-	border: none;
-	color: var(--text-dark);
+	border: 1px solid transparent;
+	color: var(--text);
 	padding: 8px 10px;
-	border-radius: 8px;
+	border-radius: 10px;
 	text-align: left;
 	cursor: pointer;
-	font-size: 12px;
-	font-weight: 600;
+	font-family: inherit;
+	font-size: 13px;
+	font-weight: 400;
 	white-space: nowrap;
 }
 
+.quote-actions__menu-item-icon {
+	flex-shrink: 0;
+	opacity: 0.9;
+}
+
 .quote-actions__menu-item:hover {
-	background: rgba(148, 163, 184, 0.18);
+	background: var(--panel);
+}
+
+.quote-actions__menu-item.is-current {
+	background: color-mix(in srgb, var(--highlight) 55%, transparent);
+	border: 1px solid var(--accent);
+}
+
+.quote-actions__menu-item--accent {
+	font-weight: 700;
+	color: var(--accent);
+}
+
+.quote-actions__menu-separator {
+	height: 1px;
+	margin: 4px 2px;
+	background: var(--border);
+}
+
+.quote-actions__menu-title {
+	padding: 6px 10px 2px;
+	font-size: 11px;
+	font-weight: 700;
+	color: var(--muted);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
 }
 
 .quote-actions__status .app-select__trigger {

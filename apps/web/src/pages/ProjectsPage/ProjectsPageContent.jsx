@@ -1,6 +1,7 @@
 import ProjectList from "../../components/ProjectList/ProjectList.jsx";
 
 export default function ProjectsPageContent({
+  projectsCount,
   filteredProjects,
   error,
   isLoading,
@@ -16,8 +17,10 @@ export default function ProjectsPageContent({
   versionsByProject,
   versionsOpenByProject,
   versionsLoadingByProject,
+  selectedVersionsByProject,
   onToggleVersions,
   onSelectVersion,
+  onAcceptVersion,
   onStatusChange,
   hideStatusControls,
 }) {
@@ -25,6 +28,9 @@ export default function ProjectsPageContent({
     <div className="projects__placeholder">
       <h3>Listado de proyectos ({filteredProjects.length})</h3>
       <p>Se muestran los proyectos según filtros activos y búsqueda global.</p>
+      {!isLoading && !error && projectsCount > 0 && filteredProjects.length === 0 && (
+        <p className="projects__status">No hay coincidencias con los filtros actuales. Se restablecieron a "Todos" al entrar.</p>
+      )}
       {error && <p className="projects__status projects__status--error">{error}</p>}
       {isLoading ? (
         <div className="projects__skeleton">
@@ -58,8 +64,10 @@ export default function ProjectsPageContent({
           versionsByProject={versionsByProject}
           versionsOpenByProject={versionsOpenByProject}
           versionsLoadingByProject={versionsLoadingByProject}
+          selectedVersionsByProject={selectedVersionsByProject}
           onToggleVersions={onToggleVersions}
           onSelectVersion={onSelectVersion}
+          onAcceptVersion={onAcceptVersion}
           onStatusChange={onStatusChange}
           hideStatusControls={hideStatusControls}
         />

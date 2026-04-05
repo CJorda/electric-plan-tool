@@ -13,17 +13,12 @@ export default function CanvasEditorHeader({
   cables,
   cableTypes,
   devices,
+  snapshotPricing,
   onRestoreDesign,
   authToken,
 }) {
   return (
     <div className="canvas__header-status">
-      {onTogglePartsList && (
-        <button className="canvas__edit" type="button" onClick={onTogglePartsList}>
-          Listado de piezas
-        </button>
-      )}
-
       <div className="canvas__header-spacer" />
 
       {projectId && (
@@ -33,8 +28,10 @@ export default function CanvasEditorHeader({
             projectStatus={projectStatus}
             statusOptions={statusOptions}
             onStatusChange={onProjectStatusChange}
+            onTogglePartsList={onTogglePartsList}
             hideStatusControls={hideStatusControls}
             designSnapshot={{ boxes, cables, devices, cableTypes }}
+            snapshotPricing={snapshotPricing}
             onRestoreDesign={onRestoreDesign}
             authToken={authToken}
           />

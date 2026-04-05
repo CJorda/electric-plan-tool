@@ -21,6 +21,15 @@ export default function QuoteRevisionModal({
     [versions]
   );
 
+  const handleOpenVersion = (version) => {
+    if (!version) return;
+    if (version.locked) {
+      onRestore?.(version);
+      return;
+    }
+    onSetActive?.(version);
+  };
+
   if (!open) return null;
 
   return (
@@ -98,11 +107,12 @@ export default function QuoteRevisionModal({
                     <span className="qr-modal__active">Activa</span>
                   ) : (
                     <div className="qr-modal__row-actions">
-                      <button className="qr-modal__restore" type="button" onClick={() => onRestore?.(v)}>
-                        Restaurar
-                      </button>
-                      <button className="qr-modal__primary" type="button" onClick={() => onSetActive?.(v)}>
-                        Trabajar
+                      <button
+                        className={v.locked ? "qr-modal__restore" : "qr-modal__primary"}
+                        type="button"
+                        onClick={() => handleOpenVersion(v)}
+                      >
+                        Abrir
                       </button>
                     </div>
                   )}

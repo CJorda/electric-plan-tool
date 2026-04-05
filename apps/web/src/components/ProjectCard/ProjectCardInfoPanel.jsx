@@ -26,30 +26,20 @@ export default function ProjectCardInfoPanel({
                 value={projectName}
                 onChange={(event) => setProjectName(event.target.value)}
                 placeholder="Nombre del proyecto"
-              />
-              <div className="projects__project-edit-actions">
-                <button
-                  type="button"
-                  className="projects__version-rename"
-                  onClick={() => {
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
                     if (!projectName.trim()) return;
                     onRenameProject?.(project, projectName.trim());
                     setEditingProject(false);
-                  }}
-                >
-                  Guardar
-                </button>
-                <button
-                  type="button"
-                  className="projects__version-cancel"
-                  onClick={() => {
+                  }
+                  if (event.key === "Escape") {
+                    event.preventDefault();
                     setProjectName(project.name || "");
                     setEditingProject(false);
-                  }}
-                >
-                  Cancelar
-                </button>
-              </div>
+                  }
+                }}
+              />
             </div>
           ) : (
             <strong className="projects__name">{project.name}</strong>

@@ -50,15 +50,17 @@ function CatalogPage({
   onUpdateMargin,
   onDeleteMargin,
 }) {
-  const isProvidersAndManufacturersSection =
-    isProvidersSection || isManufacturersSection || activeSubsection === "Proveedores y fabricantes";
+  const isProvidersCatalogSection =
+    isProvidersSection || activeSubsection === "Proveedores y fabricantes";
+  const isManufacturersCatalogSection = isManufacturersSection;
   const isPricingRulesSection =
     isMarginsSection || activeSubsection === "Reglas de precio";
   const isCatalogUnifiedSection = isProductsSection || isCategoriesSection;
   const isActive =
     isCatalogUnifiedSection ||
     isPricingRulesSection ||
-    isProvidersAndManufacturersSection;
+    isProvidersCatalogSection ||
+    isManufacturersCatalogSection;
 
   if (!isActive) return null;
 
@@ -67,7 +69,8 @@ function CatalogPage({
       <CatalogLoadingState
         isCatalogUnifiedSection={isCatalogUnifiedSection}
         isMarginsSection={isMarginsSection}
-        isProvidersAndManufacturersSection={isProvidersAndManufacturersSection}
+        isProvidersSection={isProvidersCatalogSection}
+        isManufacturersSection={isManufacturersCatalogSection}
       />
     );
   }
@@ -75,7 +78,8 @@ function CatalogPage({
   return (
     <CatalogContentSections
       isCatalogUnifiedSection={isCatalogUnifiedSection}
-      isProvidersAndManufacturersSection={isProvidersAndManufacturersSection}
+      isProvidersSection={isProvidersCatalogSection}
+      isManufacturersSection={isManufacturersCatalogSection}
       isPricingRulesSection={isPricingRulesSection}
       authToken={authToken}
       productCategoryOptions={productCategoryOptions}

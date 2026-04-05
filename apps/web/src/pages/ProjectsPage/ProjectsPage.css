@@ -458,6 +458,13 @@
   font-size: 0.85rem;
 }
 
+.projects__version-title {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .projects__version-edit-actions {
   display: inline-flex;
   gap: 8px;
@@ -522,6 +529,20 @@
   padding: 6px 10px;
   cursor: pointer;
   font-weight: 600;
+}
+
+.projects__version-accept {
+  background: transparent;
+  color: var(--success);
+  border: 1px solid color-mix(in srgb, var(--success) 52%, var(--border));
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.projects__version-accept.is-active {
+  background: color-mix(in srgb, var(--success) 16%, transparent);
 }
 
 .projects__version-delete {
