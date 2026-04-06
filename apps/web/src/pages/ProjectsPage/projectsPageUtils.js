@@ -1,10 +1,6 @@
 export const buildFilteredProjects = ({
   projects,
   searchQuery,
-  attachmentsByProject,
-  projectTotals,
-  quickFilter,
-  statusFilter,
 }) => {
   const query = String(searchQuery || "").trim().toLowerCase();
   let items = [...projects];
@@ -24,22 +20,6 @@ export const buildFilteredProjects = ({
         .toLowerCase();
       return searchable.includes(query);
     });
-  }
-
-  if (statusFilter && statusFilter !== "all") {
-    items = items.filter(
-      (project) => String(project.status || "draft").toLowerCase() === statusFilter
-    );
-  }
-
-  if (quickFilter === "with-attachments") {
-    items = items.filter((project) => (attachmentsByProject[project.id]?.length || 0) > 0);
-  }
-
-  if (quickFilter === "cost-desc") {
-    items = items.sort(
-      (a, b) => Number(projectTotals[b.id] || 0) - Number(projectTotals[a.id] || 0)
-    );
   }
 
   return items;

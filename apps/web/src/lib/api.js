@@ -34,6 +34,23 @@ const REFRESH_RETRY_BLOCK_MS = 8000;
 let refreshInFlight = null;
 let refreshBlockedUntil = 0;
 
+const parseRetryAfterMs = (response) => {
+  const retryAfterHeader = response?.headers?.get?.("Retry-After");
+  if (!retryAfterHeader) return 0;
+
+  const seconds = Number(retryAfterHeader);
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return Math.round(seconds * 1000);
+  }
+
+  const retryAt = Date.parse(retryAfterHeader);
+  if (!Number.isNaN(retryAt)) {
+    return Math.max(0, retryAt - Date.now());
+  }
+
+  return 0;
+};
+
 const readStoredAccessToken = () => {
   if (typeof window === "undefined") return "";
   try {
@@ -95,6 +112,11 @@ const tryRefreshToken = async () => {
     });
     if (!refreshResponse.ok) {
       if (refreshResponse.status === 401 || refreshResponse.status === 403) {
+        refreshBlockedUntil = Date.now() + REFRESH_RETRY_BLOCK_MS;
+      } else if (refreshResponse.status === 429) {
+        const retryAfterMs = parseRetryAfterMs(refreshResponse);
+        refreshBlockedUntil = Date.now() + Math.max(REFRESH_RETRY_BLOCK_MS, retryAfterMs);
+      } else if (refreshResponse.status >= 500) {
         refreshBlockedUntil = Date.now() + REFRESH_RETRY_BLOCK_MS;
       }
       return null;

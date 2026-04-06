@@ -1,5 +1,3 @@
-import DeleteIconButton from "../ui/DeleteIconButton.jsx";
-
 export default function ProductDeleteModal({
   open,
   productName,
@@ -21,7 +19,9 @@ export default function ProductDeleteModal({
           <button className="products__modal-cancel" type="button" onClick={onCancel}>
             Cancelar
           </button>
-          <DeleteIconButton ariaLabel="Confirmar eliminación de producto" onClick={onConfirm} />
+          <button className="products__modal-confirm" type="button" onClick={onConfirm}>
+            Eliminar
+          </button>
         </div>
       </div>
     </div>

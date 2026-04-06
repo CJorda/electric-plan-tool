@@ -69,6 +69,10 @@ export default function useAuthSession() {
       }
 
       if (!res.ok) {
+        if (res.status === 429) {
+          setLoginError(data.error || "Demasiadas solicitudes. Espera unos segundos y vuelve a intentar.");
+          return;
+        }
         const errorMessage = data.error || responseText?.slice(0, 200) || `Error de login (${res.status})`;
         setLoginError(errorMessage);
         return;

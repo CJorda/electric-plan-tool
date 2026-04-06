@@ -6,7 +6,6 @@ import CatalogLoadingState from "./CatalogLoadingState.jsx";
 function CatalogPage({
   isProductsSection,
   isCategoriesSection,
-  isMarginsSection,
   isManufacturersSection,
   isProvidersSection,
   activeSubsection,
@@ -47,24 +46,15 @@ function CatalogPage({
   onAddManufacturer,
   onUpdateManufacturer,
   onDeleteManufacturer,
-  margins,
-  marginForm,
-  onMarginFormChange,
-  onAddMargin,
-  onUpdateMargin,
-  onDeleteMargin,
 }) {
   "use memo";
 
   const isProvidersCatalogSection =
     isProvidersSection || activeSubsection === "Proveedores y fabricantes";
   const isManufacturersCatalogSection = isManufacturersSection;
-  const isPricingRulesSection =
-    isMarginsSection || activeSubsection === "Reglas de precio";
   const isCatalogUnifiedSection = isProductsSection || isCategoriesSection;
   const isActive =
     isCatalogUnifiedSection ||
-    isPricingRulesSection ||
     isProvidersCatalogSection ||
     isManufacturersCatalogSection;
 
@@ -74,7 +64,6 @@ function CatalogPage({
     return (
       <CatalogLoadingState
         isCatalogUnifiedSection={isCatalogUnifiedSection}
-        isMarginsSection={isMarginsSection}
         isProvidersSection={isProvidersCatalogSection}
         isManufacturersSection={isManufacturersCatalogSection}
       />
@@ -86,7 +75,6 @@ function CatalogPage({
       isCatalogUnifiedSection={isCatalogUnifiedSection}
       isProvidersSection={isProvidersCatalogSection}
       isManufacturersSection={isManufacturersCatalogSection}
-      isPricingRulesSection={isPricingRulesSection}
       authToken={authToken}
       productCategoryOptions={productCategoryOptions}
       categories={categories}
@@ -123,12 +111,6 @@ function CatalogPage({
       onAddManufacturer={onAddManufacturer}
       onUpdateManufacturer={onUpdateManufacturer}
       onDeleteManufacturer={onDeleteManufacturer}
-      margins={margins}
-      marginForm={marginForm}
-      onMarginFormChange={onMarginFormChange}
-      onAddMargin={onAddMargin}
-      onUpdateMargin={onUpdateMargin}
-      onDeleteMargin={onDeleteMargin}
     />
   );
 }

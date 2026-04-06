@@ -53,7 +53,7 @@ function BoxModal({
     }
     return items.map((item) => ({
       value: item.catalogKey || item.name,
-      label: `${item.name}${item.distributorName ? ` · ${item.distributorName}` : ""} (${formatCurrency(item.price)})`,
+      label: `${item.name} (${formatCurrency(item.price)})`,
     }));
   }, [catalog, componentForm.category]);
 
@@ -81,13 +81,15 @@ function BoxModal({
       return undefined;
     }
 
-    const currentTariffLabel = selectedCatalogItem.tariffLabel || "Tarifa actual";
+    const currentTariffLabel = selectedCatalogItem.tariffLabel || "";
     const currentTariffOption = {
       value: "",
       priceHistoryId: "",
       unitPrice: Number(selectedCatalogItem.price) || 0,
       tariffLabel: currentTariffLabel,
-      label: `${currentTariffLabel} · ${formatCurrency(selectedCatalogItem.price)}`,
+      label: currentTariffLabel
+        ? `${currentTariffLabel} · ${formatCurrency(selectedCatalogItem.price)}`
+        : formatCurrency(selectedCatalogItem.price),
     };
 
     const loadTariffs = async () => {
@@ -160,7 +162,7 @@ function BoxModal({
       distributorId: firstItem?.distributorId || "",
       distributorName: firstItem?.distributorName || "",
       priceHistoryId: "",
-      tariffLabel: firstItem?.tariffLabel || "Tarifa actual",
+      tariffLabel: firstItem?.tariffLabel || "",
     });
   };
 
@@ -176,7 +178,7 @@ function BoxModal({
       distributorId: nextModel.distributorId || "",
       distributorName: nextModel.distributorName || "",
       priceHistoryId: "",
-      tariffLabel: nextModel.tariffLabel || "Tarifa actual",
+      tariffLabel: nextModel.tariffLabel || "",
     });
   };
 
@@ -248,7 +250,7 @@ function BoxModal({
                       value: option.value,
                       label: option.label,
                     }))
-                  : [{ value: "", label: "Tarifa actual", disabled: true }]
+                  : [{ value: "", label: "Sin histórico", disabled: true }]
               }
               onChange={handleTariffChange}
               disabled={!selectedCatalogItem || tariffOptions.length === 0}
@@ -273,9 +275,6 @@ function BoxModal({
           </p>
           {selectedTariffOption ? (
             <p className="modal__hint">Tarifa seleccionada: {selectedTariffOption.label}</p>
-          ) : null}
-          {selectedCatalogItem?.distributorName ? (
-            <p className="modal__hint">Proveedor: {selectedCatalogItem.distributorName}</p>
           ) : null}
           {isTariffLoading ? <p className="modal__hint">Cargando historial de tarifas...</p> : null}
         </div>
@@ -309,7 +308,6 @@ function BoxModal({
                   <div className="modal__list-meta">
                     {component.category} · {component.quantity} uds · {formatCurrency(component.unitPrice)}
                     {component.tariffLabel ? ` · ${component.tariffLabel}` : ""}
-                    {component.distributorName ? ` · ${component.distributorName}` : ""}
                   </div>
                 </div>
                 <div className="modal__list-actions">

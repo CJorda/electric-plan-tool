@@ -6,6 +6,11 @@
 .manufacturers__table{border: 1px solid var(--border);border-radius:14px;overflow:hidden}
 .manufacturers__head,.manufacturers__row{display:grid;grid-template-columns:1.2fr 1fr 1.2fr 1fr 1.1fr 1.4fr 40px;gap:10px;align-items:center;padding:12px 16px}
 .manufacturers__head{background: var(--panel-strong);font-size:12px;text-transform:uppercase;letter-spacing:.04em;color: var(--muted);font-weight:700}
+.manufacturers__sort{display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;padding:0;cursor:pointer;text-align:left}
+.manufacturers__sort:hover{color:var(--text)}
+.manufacturers__sort:focus-visible{outline:none;box-shadow:0 0 0 2px var(--focus-ring);border-radius:6px}
+.manufacturers__sort.is-active{color:var(--text)}
+.manufacturers__sort-indicator{font-size:10px;line-height:1;opacity:.88}
 .manufacturers__row{border-top:1px solid var(--border);font-size:13px}
 .manufacturers__row input{width:100%;padding:8px 10px;border-radius:8px;border: 1px solid var(--border);background:var(--panel);color: var(--text-dark);font-size:13px}
 .manufacturers__row--new{background: var(--panel-strong)}

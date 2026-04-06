@@ -8,7 +8,6 @@ import { authRouter } from "./routes/auth.js";
 import { projectsRouter } from "./routes/projects.js";
 import { catalogRouter } from "./routes/catalog.js";
 import { reportsRouter } from "./routes/reports.js";
-import { operationsRouter } from "./routes/operations.js";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import { initDatabase } from "./db.js";
@@ -30,15 +29,30 @@ app.use(
   })
 );
 app.use(cors(corsOptions));
+const authLimiter = rateLimit({
+  // Auth endpoints need a dedicated limiter so catalog traffic doesn't lock logins.
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: "Demasiadas solicitudes de autenticación. Intenta de nuevo en unos segundos." },
+});
+
 app.use(rateLimit({
   windowMs: rateLimitConfig.windowMs,
   max: rateLimitConfig.max,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) =>
+    req.path.startsWith("/api/auth/login") || req.path.startsWith("/api/auth/refresh"),
 }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
+
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/refresh", authLimiter);
 
 app.get("/api/health", (req, res) => {
   res.status(dbReady ? 200 : 503).json({
@@ -80,7 +94,6 @@ app.use("/api/auth", authRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api/catalog", catalogRouter);
 app.use("/api/reports", reportsRouter);
-app.use("/api/operations", operationsRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: "Ruta no encontrada" });

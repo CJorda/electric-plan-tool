@@ -9,7 +9,7 @@ export default function ProjectCreateModal({ open, onClose, onCreate, clients = 
   const [baseVersionId, setBaseVersionId] = useState('');
   const [baseVersions, setBaseVersions] = useState([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
-  const apiEnabled = import.meta.env.VITE_API_ENABLED === 'true';
+  const apiEnabled = import.meta.env.VITE_API_ENABLED !== 'false';
 
   useEffect(() => {
     if (!baseProjectId || !apiEnabled) return;

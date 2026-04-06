@@ -1,6 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import DeleteIconButton from "../ui/DeleteIconButton.jsx";
 import "./ProvidersSection.css";
+
+const SORTABLE_COLUMNS = [
+  { key: "name", label: "Distribuidor" },
+  { key: "contactName", label: "Contacto" },
+  { key: "email", label: "Email" },
+  { key: "phone", label: "Teléfono" },
+  { key: "website", label: "Web" },
+  { key: "notes", label: "Notas" },
+];
 
 export default function ProvidersSection({
   providers,
@@ -11,8 +20,31 @@ export default function ProvidersSection({
   onDeleteProvider,
 }) {
   const [showValidation, setShowValidation] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: "name", direction: "asc" });
   const isNameValid = providerForm.name.trim().length > 0;
   const isContactValid = providerForm.contactName.trim().length > 0;
+
+  const sortedProviders = useMemo(() => {
+    const directionFactor = sortConfig.direction === "asc" ? 1 : -1;
+    return [...providers].sort((a, b) => {
+      const aValue = String(a?.[sortConfig.key] || "").trim();
+      const bValue = String(b?.[sortConfig.key] || "").trim();
+      return aValue.localeCompare(bValue, "es", { sensitivity: "base", numeric: true }) * directionFactor;
+    });
+  }, [providers, sortConfig]);
+
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return {
+          key,
+          direction: prev.direction === "asc" ? "desc" : "asc",
+        };
+      }
+      return { key, direction: "asc" };
+    });
+  };
+
   const handleAdd = () => {
     if (!isNameValid || !isContactValid) {
       setShowValidation(true);
@@ -34,12 +66,23 @@ export default function ProvidersSection({
 
       <div className="providers__table">
         <div className="providers__head">
-          <span>Distribuidor</span>
-          <span>Contacto</span>
-          <span>Email</span>
-          <span>Teléfono</span>
-          <span>Web</span>
-          <span>Notas</span>
+          {SORTABLE_COLUMNS.map((column) => (
+            <button
+              key={column.key}
+              type="button"
+              className={`providers__sort${sortConfig.key === column.key ? " is-active" : ""}`}
+              onClick={() => handleSort(column.key)}
+            >
+              <span>{column.label}</span>
+              <span className="providers__sort-indicator" aria-hidden="true">
+                {sortConfig.key === column.key
+                  ? sortConfig.direction === "asc"
+                    ? "A-Z"
+                    : "Z-A"
+                  : "↕"}
+              </span>
+            </button>
+          ))}
           <span />
         </div>
 
@@ -85,10 +128,10 @@ export default function ProvidersSection({
           <span className="providers__hint">Completa y pulsa Añadir</span>
         </div>
 
-        {providers.length === 0 ? (
+        {sortedProviders.length === 0 ? (
           <div className="providers__empty">Aún no hay distribuidores registrados.</div>
         ) : (
-          providers.map((provider) => (
+          sortedProviders.map((provider) => (
             <div key={provider.id} className="providers__row">
               <input
                 value={provider.name}

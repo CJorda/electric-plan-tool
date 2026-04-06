@@ -295,11 +295,12 @@
   grid-template-columns: minmax(240px, 1fr) auto auto;
   align-items: center;
   gap: 16px;
-  transition: border-color 0.15s ease;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .projects__card:hover {
-  border-color: rgba(15, 23, 42, 0.15);
+  background: color-mix(in srgb, var(--panel-strong) 82%, var(--accent) 18%);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 72%, transparent);
 }
 
 .projects__info {

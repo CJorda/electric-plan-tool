@@ -1,5 +1,5 @@
 import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useState } from "react";
-import { Home, FolderKanban, Package, Users, Briefcase } from "lucide-react";
+import { Home, FolderKanban, Package, Users } from "lucide-react";
 import Sidebar from "./components/Sidebar/Sidebar.jsx";
 import Toolbar from "./components/Toolbar/Toolbar.jsx";
 import LoginPage from "./pages/LoginPage/LoginPage.jsx";
@@ -10,7 +10,6 @@ import useCanvas from "./hooks/useCanvas.js";
 import useClients from "./hooks/useClients.js";
 import useAuthSession from "./hooks/useAuthSession.js";
 import AppBreadcrumb from "./components/AppShell/AppBreadcrumb.jsx";
-import { OPERATIONS_MODULES } from "./constants/operationsModules.js";
 import { DEFAULT_COMPONENT_FORM, MODES, STATUS_OPTIONS } from "./constants/appConstants.js";
 import "./App.css";
 
@@ -35,7 +34,6 @@ const DashboardPage = lazy(() => import("./pages/DashboardPage/DashboardPage.jsx
 const CanvasPage = lazy(() => import("./pages/CanvasPage/CanvasPage.jsx"));
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage/ProjectsPage.jsx"));
 const ClientsPage = lazy(() => import("./pages/ClientsPage/ClientsPage.jsx"));
-const OperationsPage = lazy(() => import("./pages/OperationsPage/OperationsPage.jsx"));
 const CableTypeModal = lazy(() => import("./components/modals/CableTypeModal/CableTypeModal.jsx"));
 const AppGlobalModals = lazy(() => import("./components/AppShell/AppGlobalModals.jsx"));
 
@@ -151,7 +149,6 @@ function App() {
     dashboard: true,
     catalog: false,
     clients: false,
-    operations: false,
     projects: false,
     canvas: false,
   }));
@@ -190,16 +187,10 @@ function App() {
     manufacturers,
     manufacturerForm,
     setManufacturerForm,
-    margins,
-    marginForm,
-    setMarginForm,
     handleAddProvider,
     handleAddManufacturer,
     updateManufacturer,
     deleteManufacturer,
-    handleAddMargin,
-    updateMargin,
-    deleteMargin,
   } = useCatalog({ authToken: accessToken });
 
   const {
@@ -212,7 +203,7 @@ function App() {
   } = useClients();
 
   const { projects, isLoading: isProjectsLoading } = useProjects({
-    apiEnabled: import.meta.env.VITE_API_ENABLED === "true",
+    apiEnabled: import.meta.env.VITE_API_ENABLED !== "false",
     authToken: accessToken,
   });
 
@@ -336,15 +327,6 @@ function App() {
     if (!activeProjectId) return;
     const timeout = setTimeout(() => {
       if (activeVersion?.locked) return;
-      const marginByCategory = new Map();
-      (margins || []).forEach((margin) => {
-        const category = margin?.categoryName;
-        const percent = Number(margin?.marginPercent) || 0;
-        if (!category) return;
-        const current = marginByCategory.get(category) ?? 0;
-        if (percent > current) marginByCategory.set(category, percent);
-      });
-
       const snapshotComponentsTotal = boxes.reduce((sum, box) => {
         return sum + (box.components || []).reduce((componentSum, component) => {
           const quantity = Number(component.quantity) || 1;
@@ -353,17 +335,7 @@ function App() {
           return componentSum + (Number.isFinite(base) ? base : unit * quantity);
         }, 0);
       }, 0);
-      const snapshotMarginTotal = boxes.reduce((sum, box) => {
-        return sum + (box.components || []).reduce((componentSum, component) => {
-          const category = component.category || "";
-          const percent = marginByCategory.get(category) || 0;
-          const quantity = Number(component.quantity) || 1;
-          const unit = Number(component.unitPrice) || 0;
-          const base = Number(component.total);
-          const componentBase = Number.isFinite(base) ? base : unit * quantity;
-          return componentSum + componentBase * (percent / 100);
-        }, 0);
-      }, 0);
+      const snapshotMarginTotal = 0;
       const snapshotCablesTotal = cables.reduce((sum, cable) => sum + (Number(cable.totalPrice) || 0), 0);
       const snapshotDevicesTotal = devices.reduce(
         (sum, device) => sum + (Number(device.total) || Number(device.unitPrice) || 0),
@@ -400,7 +372,7 @@ function App() {
       }
     }, 500);
     return () => clearTimeout(timeout);
-  }, [activeProjectId, boxes, cables, devices, cableTypes, margins, accessToken, activeVersion]);
+  }, [activeProjectId, boxes, cables, devices, cableTypes, accessToken, activeVersion]);
 
   const restoreDesign = useCallback(async (design) => {
     const nextBoxes = Array.isArray(design?.boxes) ? design.boxes : [];
@@ -632,17 +604,12 @@ function App() {
       {
         title: "Catálogo",
         icon: Package,
-        items: ["Productos", "Proveedores", "Fabricantes", "Reglas de precio"],
+        items: ["Productos", "Proveedores", "Fabricantes"],
       },
       {
         title: "Clientes",
         icon: Users,
         items: [],
-      },
-      {
-        title: "Operaciones",
-        icon: Briefcase,
-        items: OPERATIONS_MODULES.map((module) => module.title),
       },
     ],
     []
@@ -684,16 +651,13 @@ function App() {
   const isProductsSection = activeSection === "Catálogo" && activeSubsection === "Productos";
   const isCategoriesSection = activeSection === "Catálogo" && activeSubsection === "Categorías";
   const isProvidersSection = activeSection === "Catálogo" && activeSubsection === "Proveedores";
-  const isMarginsSection = activeSection === "Catálogo" && activeSubsection === "Reglas de precio";
   const isManufacturersSection = activeSection === "Catálogo" && activeSubsection === "Fabricantes";
   const isProjectsSection = activeSection === "Proyectos";
   const isClientsSection = activeSection === "Clientes";
-  const isOperationsSection = activeSection === "Operaciones";
   const isCatalogSectionActive =
     (isProductsSection ||
       isCategoriesSection ||
       isProvidersSection ||
-      isMarginsSection ||
       isManufacturersSection) && !isProjectDesignMode;
   const hideToolbar =
     (
@@ -701,18 +665,15 @@ function App() {
       isProductsSection ||
       isCategoriesSection ||
       isProvidersSection ||
-      isMarginsSection ||
       isManufacturersSection ||
       isProjectsSection ||
-      isClientsSection ||
-      isOperationsSection
+      isClientsSection
     ) && !isProjectDesignMode;
 
   useEffect(() => {
     const nextDashboard = isDashboardSection && !isProjectDesignMode;
     const nextCatalog = isCatalogSectionActive;
     const nextClients = isClientsSection && !isProjectDesignMode;
-    const nextOperations = isOperationsSection && !isProjectDesignMode;
     const nextProjects = isProjectsSection && !isProjectDesignMode;
     const nextCanvas = isProjectDesignMode;
 
@@ -721,7 +682,6 @@ function App() {
         dashboard: prev.dashboard || nextDashboard,
         catalog: prev.catalog || nextCatalog,
         clients: prev.clients || nextClients,
-        operations: prev.operations || nextOperations,
         projects: prev.projects || nextProjects,
         canvas: prev.canvas || nextCanvas,
       };
@@ -729,7 +689,6 @@ function App() {
         updated.dashboard === prev.dashboard &&
         updated.catalog === prev.catalog &&
         updated.clients === prev.clients &&
-        updated.operations === prev.operations &&
         updated.projects === prev.projects &&
         updated.canvas === prev.canvas
       ) {
@@ -741,7 +700,6 @@ function App() {
     isDashboardSection,
     isCatalogSectionActive,
     isClientsSection,
-    isOperationsSection,
     isProjectsSection,
     isProjectDesignMode,
   ]);
@@ -811,32 +769,9 @@ function App() {
     setCableTypes(normalizeCableTypes(nextTypes));
   };
 
-  const categoryMarginMap = useMemo(() => {
-    const map = new Map();
-    (margins || []).forEach((margin) => {
-      const name = margin.categoryName;
-      const percent = Number(margin.marginPercent) || 0;
-      if (!name) return;
-      const current = map.get(name) ?? 0;
-      if (percent > current) map.set(name, percent);
-    });
-    return map;
-  }, [margins]);
-
   const boxTotals = boxes.map((box) => box.components.reduce((sum, component) => sum + component.total, 0));
   const boxesTotal = boxTotals.reduce((sum, total) => sum + total, 0);
-  const marginTotal = boxes.reduce((sum, box) => {
-    const components = box.components || [];
-    return (
-      sum +
-      components.reduce((componentSum, component) => {
-        const category = component.category || "";
-        const percent = categoryMarginMap.get(category) || 0;
-        const base = Number(component.total) || 0;
-        return componentSum + base * (percent / 100);
-      }, 0)
-    );
-  }, 0);
+  const marginTotal = 0;
   const cablesTotal = cables.reduce((sum, cable) => sum + (Number(cable.totalPrice) || 0), 0);
   const devicesTotal = devices.reduce(
     (sum, device) => sum + (Number(device.total) || Number(device.unitPrice) || 0),
@@ -1274,7 +1209,6 @@ function App() {
               isProductsSection={isProductsSection}
               isCategoriesSection={isCategoriesSection}
               isProvidersSection={isProvidersSection}
-              isMarginsSection={isMarginsSection}
               isManufacturersSection={isManufacturersSection}
               activeSubsection={activeSubsection}
               onSubsectionChange={handleSubsectionChange}
@@ -1317,12 +1251,6 @@ function App() {
               onAddManufacturer={handleAddManufacturer}
               onUpdateManufacturer={updateManufacturer}
               onDeleteManufacturer={deleteManufacturer}
-              margins={margins}
-              marginForm={marginForm}
-              onMarginFormChange={(updates) => setMarginForm((prev) => ({ ...prev, ...updates }))}
-              onAddMargin={handleAddMargin}
-              onUpdateMargin={updateMargin}
-              onDeleteMargin={deleteMargin}
             />
           </Suspense>
         ) : null}
@@ -1337,17 +1265,6 @@ function App() {
               onAddClient={handleAddClient}
               onUpdateClient={updateClient}
               onDeleteClient={deleteClient}
-            />
-          </Suspense>
-        ) : null}
-
-        {loadedPanels.operations ? (
-          <Suspense fallback={LAZY_SECTION_FALLBACK}>
-            <OperationsPage
-              key={`operations-${activeSubsection}`}
-              isActive={isOperationsSection && !isProjectDesignMode}
-              activeSubsection={activeSubsection}
-              authToken={accessToken}
             />
           </Suspense>
         ) : null}

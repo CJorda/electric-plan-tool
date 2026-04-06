@@ -6,6 +6,11 @@
 .providers__table{border: 1px solid var(--border);border-radius:14px;overflow:hidden}
 .providers__head,.providers__row{display:grid;grid-template-columns:1.2fr 1fr 1.2fr 1fr 1.1fr 1.4fr 40px;gap:10px;align-items:center;padding:12px 16px}
 .providers__head{background: var(--panel-strong);font-size:12px;text-transform:uppercase;letter-spacing:.04em;color: var(--muted);font-weight:700}
+.providers__sort{display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;color:inherit;font:inherit;text-transform:inherit;letter-spacing:inherit;padding:0;cursor:pointer;text-align:left}
+.providers__sort:hover{color:var(--text)}
+.providers__sort:focus-visible{outline:none;box-shadow:0 0 0 2px var(--focus-ring);border-radius:6px}
+.providers__sort.is-active{color:var(--text)}
+.providers__sort-indicator{font-size:10px;line-height:1;opacity:.88}
 .providers__row{border-top:1px solid var(--border);font-size:13px}
 .providers__row input{width:100%;padding:8px 10px;border-radius:8px;border: 1px solid var(--border);background:var(--panel);color: var(--text-dark);font-size:13px}
 .providers__row--new{background: var(--panel-strong)}

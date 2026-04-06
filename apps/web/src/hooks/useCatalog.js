@@ -9,7 +9,7 @@ const normalizeProductWithDiscountPercent = (item) => {
 };
 
 function useCatalog({ authToken = "" } = {}) {
-  const apiEnabled = import.meta.env.VITE_API_ENABLED === "true";
+  const apiEnabled = import.meta.env.VITE_API_ENABLED !== "false";
   const authFetch = useCallback((url, options) => apiFetch(url, options, authToken), [authToken]);
   const [isLoading, setIsLoading] = useState(false);
   const [productForm, setProductForm] = useState({
@@ -750,7 +750,11 @@ function useCatalog({ authToken = "" } = {}) {
       });
 
       if (!response.ok) {
-        throw new Error("Error guardando nueva tarifa");
+        const data = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          throw new Error(data.error || "Demasiadas solicitudes. Espera unos segundos e inténtalo de nuevo.");
+        }
+        throw new Error(data.error || "Error guardando nueva tarifa");
       }
 
       const updated = normalizeProductWithDiscountPercent(await response.json());

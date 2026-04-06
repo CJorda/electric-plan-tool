@@ -1,6 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import DeleteIconButton from "../ui/DeleteIconButton.jsx";
 import "./ManufacturersSection.css";
+
+const SORTABLE_COLUMNS = [
+  { key: "name", label: "Fabricante" },
+  { key: "contactName", label: "Contacto" },
+  { key: "email", label: "Email" },
+  { key: "phone", label: "Teléfono" },
+  { key: "website", label: "Web" },
+  { key: "notes", label: "Notas" },
+];
 
 export default function ManufacturersSection({
   manufacturers,
@@ -11,8 +20,31 @@ export default function ManufacturersSection({
   onDeleteManufacturer,
 }) {
   const [showValidation, setShowValidation] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: "name", direction: "asc" });
   const isNameValid = manufacturerForm.name.trim().length > 0;
   const isContactValid = manufacturerForm.contactName.trim().length > 0;
+
+  const sortedManufacturers = useMemo(() => {
+    const directionFactor = sortConfig.direction === "asc" ? 1 : -1;
+    return [...manufacturers].sort((a, b) => {
+      const aValue = String(a?.[sortConfig.key] || "").trim();
+      const bValue = String(b?.[sortConfig.key] || "").trim();
+      return aValue.localeCompare(bValue, "es", { sensitivity: "base", numeric: true }) * directionFactor;
+    });
+  }, [manufacturers, sortConfig]);
+
+  const handleSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return {
+          key,
+          direction: prev.direction === "asc" ? "desc" : "asc",
+        };
+      }
+      return { key, direction: "asc" };
+    });
+  };
+
   const handleAdd = () => {
     if (!isNameValid || !isContactValid) {
       setShowValidation(true);
@@ -36,12 +68,23 @@ export default function ManufacturersSection({
 
       <div className="manufacturers__table">
         <div className="manufacturers__head">
-          <span>Fabricante</span>
-          <span>Contacto</span>
-          <span>Email</span>
-          <span>Teléfono</span>
-          <span>Web</span>
-          <span>Notas</span>
+          {SORTABLE_COLUMNS.map((column) => (
+            <button
+              key={column.key}
+              type="button"
+              className={`manufacturers__sort${sortConfig.key === column.key ? " is-active" : ""}`}
+              onClick={() => handleSort(column.key)}
+            >
+              <span>{column.label}</span>
+              <span className="manufacturers__sort-indicator" aria-hidden="true">
+                {sortConfig.key === column.key
+                  ? sortConfig.direction === "asc"
+                    ? "A-Z"
+                    : "Z-A"
+                  : "↕"}
+              </span>
+            </button>
+          ))}
           <span />
         </div>
 
@@ -87,10 +130,10 @@ export default function ManufacturersSection({
           <span className="manufacturers__hint">Completa y pulsa Añadir</span>
         </div>
 
-        {manufacturers.length === 0 ? (
+        {sortedManufacturers.length === 0 ? (
           <div className="manufacturers__empty">Aún no hay fabricantes registrados.</div>
         ) : (
-          manufacturers.map((manufacturer) => (
+          sortedManufacturers.map((manufacturer) => (
             <div key={manufacturer.id} className="manufacturers__row">
               <input
                 value={manufacturer.name}

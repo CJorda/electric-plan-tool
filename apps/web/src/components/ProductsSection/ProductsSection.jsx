@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DeleteIconButton from "../ui/DeleteIconButton.jsx";
 import ProductDeleteModal from "./ProductDeleteModal.jsx";
 import ProductsCategoriesDrawer from "./ProductsCategoriesDrawer.jsx";
@@ -8,6 +8,7 @@ import ProductsListContent from "./ProductsListContent.jsx";
 import ProductsTreePanel from "./ProductsTreePanel.jsx";
 import useProductImages from "./useProductImages.js";
 import useProductsTreeState from "./useProductsTreeState.js";
+import { toastError } from "../../lib/toast.js";
 import "./ProductsSection.css";
 
 const toNumber = (value) => {
@@ -23,7 +24,7 @@ const getDiscountedPrice = (pvp, discountPercent) => {
   return Number.isFinite(raw) ? Math.max(0, raw) : 0;
 };
 
-const formatCurrency = (value) => `€${(Number(value) || 0).toFixed(2)}`;
+const formatCurrency = (value) => `${(Number(value) || 0).toFixed(2)} €`;
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -49,6 +50,9 @@ const buildProductForm = (product) => ({
   shippingCost: String(product?.shippingCost ?? 0),
   leadTime: product?.leadTime || "",
 });
+
+const buildPriceEvolutionKey = (productId, distributorId) =>
+  `${productId || ""}::${distributorId || ""}`;
 
 function ProductsSection({
   authToken,
@@ -82,6 +86,7 @@ function ProductsSection({
   const [createImagePreview, setCreateImagePreview] = useState("");
 
   const [detailProductId, setDetailProductId] = useState(null);
+  const [detailDistributorId, setDetailDistributorId] = useState("");
   const [detailForm, setDetailForm] = useState(null);
   const [detailImageFile, setDetailImageFile] = useState(null);
   const [detailImagePreview, setDetailImagePreview] = useState("");
@@ -91,6 +96,9 @@ function ProductsSection({
   const [tariffNote, setTariffNote] = useState("");
   const [isCreatingTariff, setIsCreatingTariff] = useState(false);
   const [isCategoriesDrawerOpen, setIsCategoriesDrawerOpen] = useState(false);
+  const [priceEvolutionByKey, setPriceEvolutionByKey] = useState({});
+  const loadingEvolutionKeysRef = useRef(new Set());
+  const MAX_SPARKLINE_PRODUCTS = 40;
 
   const categoryOptions = useMemo(() => {
     if (categories.length === 0) {
@@ -117,11 +125,6 @@ function ProductsSection({
         value: provider.id,
         label: provider.name,
       })),
-    [providers]
-  );
-
-  const providersById = useMemo(
-    () => new Map((providers || []).map((provider) => [provider.id, provider.name])),
     [providers]
   );
 
@@ -154,13 +157,93 @@ function ProductsSection({
   });
 
   const selectedProduct = useMemo(
-    () => sourceProducts.find((product) => product.id === detailProductId) || null,
-    [sourceProducts, detailProductId]
+    () => {
+      const normalizedDistributorId = String(detailDistributorId || "");
+      const exactMatch = sourceProducts.find(
+        (product) =>
+          product.id === detailProductId &&
+          String(product.distributorId || "") === normalizedDistributorId
+      );
+      if (exactMatch) {
+        return exactMatch;
+      }
+      return sourceProducts.find((product) => product.id === detailProductId) || null;
+    },
+    [sourceProducts, detailProductId, detailDistributorId]
   );
+
+  useEffect(() => {
+    if (!onLoadProductPriceHistory || visibleProducts.length === 0) return;
+
+    // Limit history requests used for sparklines to avoid exhausting API rate limits.
+    const productsForEvolution = visibleProducts.slice(0, MAX_SPARKLINE_PRODUCTS);
+
+    const pending = productsForEvolution.filter((product) => {
+      const key = buildPriceEvolutionKey(product.id, product.distributorId || "");
+      return !priceEvolutionByKey[key] && !loadingEvolutionKeysRef.current.has(key);
+    });
+
+    if (pending.length === 0) return;
+    pending.forEach((product) => {
+      const key = buildPriceEvolutionKey(product.id, product.distributorId || "");
+      loadingEvolutionKeysRef.current.add(key);
+    });
+
+    const loadEvolution = async () => {
+      const results = await Promise.all(
+        pending.map(async (product) => {
+          const key = buildPriceEvolutionKey(product.id, product.distributorId || "");
+          const fallbackPrice = Number(product.discountPrice ?? product.distributorPrice) || 0;
+
+          try {
+            let items = await onLoadProductPriceHistory(product.id, product.distributorId || "");
+            if ((items?.length || 0) < 2 && product.distributorId) {
+              const allDistributorsItems = await onLoadProductPriceHistory(product.id, "");
+              if ((allDistributorsItems?.length || 0) > (items?.length || 0)) {
+                items = allDistributorsItems;
+              }
+            }
+            const ordered = Array.isArray(items) ? [...items].reverse() : [];
+            const points = ordered
+              .map((entry) => Number(entry.discountPrice ?? entry.distributorPrice))
+              .filter((value) => Number.isFinite(value));
+
+            if (points.length === 0) {
+              return { key, points: [fallbackPrice] };
+            }
+
+            const last = points[points.length - 1];
+            if (Math.abs(last - fallbackPrice) > 0.0001) {
+              points.push(fallbackPrice);
+            }
+
+            return { key, points: points.slice(-20) };
+          } catch {
+            return { key, points: [fallbackPrice] };
+          }
+        })
+      );
+
+      setPriceEvolutionByKey((prev) => {
+        const next = { ...prev };
+        results.forEach(({ key, points }) => {
+          next[key] = points;
+        });
+        return next;
+      });
+
+      results.forEach(({ key }) => {
+        loadingEvolutionKeysRef.current.delete(key);
+      });
+    };
+
+    void loadEvolution();
+  }, [visibleProducts, onLoadProductPriceHistory, priceEvolutionByKey]);
 
   const priceHistoryWithDelta = useMemo(() => {
     return priceHistoryItems.map((item, index) => {
       const nextItem = priceHistoryItems[index + 1] || null;
+      const basePrice = Number(item.distributorPrice) || 0;
       const currentPrice = Number(item.discountPrice ?? item.distributorPrice) || 0;
       const previousPrice = nextItem
         ? Number(nextItem.discountPrice ?? nextItem.distributorPrice) || 0
@@ -170,11 +253,17 @@ function ProductsSection({
         previousPrice && previousPrice !== 0 && delta != null
           ? (delta / previousPrice) * 100
           : null;
+      const discountPercent =
+        basePrice > 0
+          ? Math.max(0, ((basePrice - currentPrice) / basePrice) * 100)
+          : 0;
       return {
         ...item,
+        basePrice,
         currentPrice,
         delta,
         deltaPercent,
+        discountPercent,
       };
     });
   }, [priceHistoryItems]);
@@ -186,11 +275,30 @@ function ProductsSection({
     }
 
     setIsPriceHistoryLoading(true);
+    const normalizedDistributorId = String(distributorId || "").trim();
     try {
-      const items = await onLoadProductPriceHistory(productId, distributorId || "");
+      let items = await onLoadProductPriceHistory(productId, normalizedDistributorId);
+
+      // Match sparkline behavior: if provider-specific history is empty, fall back to full history.
+      if ((items?.length || 0) === 0 && normalizedDistributorId) {
+        const allDistributorsItems = await onLoadProductPriceHistory(productId, "");
+        if ((allDistributorsItems?.length || 0) > 0) {
+          items = allDistributorsItems;
+        }
+      }
+
       setPriceHistoryItems(Array.isArray(items) ? items : []);
     } catch {
-      setPriceHistoryItems([]);
+      if (normalizedDistributorId) {
+        try {
+          const allDistributorsItems = await onLoadProductPriceHistory(productId, "");
+          setPriceHistoryItems(Array.isArray(allDistributorsItems) ? allDistributorsItems : []);
+        } catch {
+          setPriceHistoryItems([]);
+        }
+      } else {
+        setPriceHistoryItems([]);
+      }
     } finally {
       setIsPriceHistoryLoading(false);
     }
@@ -231,6 +339,7 @@ function ProductsSection({
 
   const openDetail = (product) => {
     setDetailProductId(product.id);
+    setDetailDistributorId(product.distributorId || "");
     setDetailForm(buildProductForm(product));
     setDetailImageFile(null);
     setDetailImagePreview(imageUrls[product.id] || "");
@@ -241,6 +350,7 @@ function ProductsSection({
 
   const closeDetail = () => {
     setDetailProductId(null);
+    setDetailDistributorId("");
     setDetailForm(null);
     setDetailImageFile(null);
     if (detailImagePreview && detailImagePreview.startsWith("blob:")) {
@@ -328,6 +438,8 @@ function ProductsSection({
         detailForm.distributorId || ""
       );
       setTariffNote("");
+    } catch (error) {
+      toastError(error?.message || "No se pudo guardar la nueva tarifa.");
     } finally {
       setIsCreatingTariff(false);
     }
@@ -439,6 +551,13 @@ function ProductsSection({
             onOpenDetail={openDetail}
             onRequestDelete={setDeleteCandidate}
             calculateDiscountedPrice={getDiscountedPrice}
+            getPriceEvolutionPoints={(product) => {
+              const key = buildPriceEvolutionKey(product.id, product.distributorId || "");
+              return (
+                priceEvolutionByKey[key] ||
+                [Number(product.discountPrice ?? product.distributorPrice) || 0]
+              );
+            }}
           />
         </div>
       </div>
@@ -518,13 +637,14 @@ function ProductsSection({
             {isPriceHistoryLoading ? (
               <p className="products__tariff-empty">Cargando historial...</p>
             ) : priceHistoryWithDelta.length === 0 ? (
-              <p className="products__tariff-empty">Sin histórico para este proveedor.</p>
+              <p className="products__tariff-empty">Sin histórico de tarifas.</p>
             ) : (
               <ul className="products__tariff-list">
                 {priceHistoryWithDelta.map((entry) => {
-                  const providerName = entry.distributorId
-                    ? providersById.get(entry.distributorId) || "Proveedor"
-                    : "General";
+                  const sanitizedNote = String(entry.note || "").trim();
+                  const isAutomaticNote = /^tarifa\s+autom[aá]tica\b/i.test(sanitizedNote);
+                  const visibleNote = isAutomaticNote ? "" : sanitizedNote;
+                  const hasEntryDiscount = entry.discountPercent > 0.01;
                   const hasDelta = entry.delta != null;
                   const deltaValue = hasDelta ? Number(entry.delta) : 0;
                   const isUp = deltaValue > 0;
@@ -541,26 +661,31 @@ function ProductsSection({
 
                   return (
                     <li key={entry.id} className="products__tariff-item">
+                      <DeleteIconButton
+                        className="products__tariff-delete"
+                        ariaLabel="Eliminar entrada de tarifa"
+                        onClick={() => handleDeleteTariffEntry(entry)}
+                        disabled={deletingHistoryEntryId === entry.id}
+                      />
                       <div className="products__tariff-meta">
-                        <span>{providerName}</span>
                         <span>{formatDateTime(entry.createdAt)}</span>
                       </div>
                       <div className="products__tariff-values">
                         <span className="products__tariff-price">{formatCurrency(entry.currentPrice)}</span>
-                        <span className={`products__tariff-delta ${deltaClass}`}>
+                      </div>
+                      <div className="products__tariff-origin">
+                        <span>
+                          {hasEntryDiscount
+                            ? `Viene de ${formatCurrency(entry.basePrice)} con ${entry.discountPercent.toFixed(2)}% dto`
+                            : `Precio base ${formatCurrency(entry.basePrice)} (sin descuento)`}
+                        </span>
+                        <span className={`products__tariff-delta products__tariff-origin-delta ${deltaClass}`}>
                           {hasDelta
                             ? `${deltaValue > 0 ? "+" : ""}${formatCurrency(deltaValue)}${percentText}`
                             : "Base"}
                         </span>
                       </div>
-                      <div className="products__tariff-footer">
-                        {entry.note ? <small>{entry.note}</small> : <small>Sin nota</small>}
-                        <DeleteIconButton
-                          ariaLabel="Eliminar entrada de tarifa"
-                          onClick={() => handleDeleteTariffEntry(entry)}
-                          disabled={deletingHistoryEntryId === entry.id}
-                        />
-                      </div>
+                      {visibleNote ? <small>{visibleNote}</small> : null}
                     </li>
                   );
                 })}

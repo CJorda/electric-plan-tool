@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import './ProjectsPage.css';
 import useProjects from '../../hooks/useProjects.js';
 import ProjectDeleteModal from '../../components/ProjectDeleteModal/ProjectDeleteModal.jsx';
@@ -9,9 +9,8 @@ import { apiFetch } from '../../lib/api.js';
 import { toastError, toastInfo, toastSuccess } from '../../lib/toast.js';
 import ProjectsPageHeader from './ProjectsPageHeader.jsx';
 import ProjectsPageContent from './ProjectsPageContent.jsx';
-import { buildFilteredProjects, downloadProjectsCsv, formatBytes, readFileAsDataUrl } from './projectsPageUtils.js';
+import { buildFilteredProjects, formatBytes, readFileAsDataUrl } from './projectsPageUtils.js';
 import { createProjectRecord } from './projectsPageCreate.js';
-import { STATUS_OPTIONS } from '../../constants/projectStatus';
 
 const calcVersionTotal = (version) => {
   const rawStoredTotal =
@@ -44,7 +43,7 @@ const calcVersionTotal = (version) => {
 };
 
 function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onProjectCreated, hideStatusControls = false, authToken = '', clients = [] }) {
-  const apiEnabled = import.meta.env.VITE_API_ENABLED === 'true';
+  const apiEnabled = import.meta.env.VITE_API_ENABLED !== 'false';
   const [projectTotals, setProjectTotals] = useState(() => {
     try {
       const s = localStorage.getItem('projectTotals');
@@ -74,53 +73,17 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
   const [versionsByProject, setVersionsByProject] = useState({});
   const [versionsOpenByProject, setVersionsOpenByProject] = useState({});
   const [versionsLoadingByProject, setVersionsLoadingByProject] = useState({});
-  const [quickFilter, setQuickFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const deferredQuickFilter = useDeferredValue(quickFilter);
-  const deferredStatusFilter = useDeferredValue(statusFilter);
-
-  useEffect(() => {
-    if (!isProjectsSection) return;
-    startTransition(() => {
-      setQuickFilter('all');
-      setStatusFilter('all');
-    });
-  }, [isProjectsSection]);
 
   const filteredProjects = useMemo(() => {
     return buildFilteredProjects({
       projects,
       searchQuery: deferredSearchQuery,
-      attachmentsByProject,
-      projectTotals,
-      quickFilter: deferredQuickFilter,
-      statusFilter: deferredStatusFilter,
     });
   }, [
     projects,
     deferredSearchQuery,
-    attachmentsByProject,
-    projectTotals,
-    deferredQuickFilter,
-    deferredStatusFilter,
   ]);
-
-  const handleQuickFilterChange = (nextQuickFilter) => {
-    startTransition(() => {
-      setQuickFilter(nextQuickFilter);
-    });
-  };
-
-  const handleStatusFilterChange = (nextStatusFilter) => {
-    startTransition(() => {
-      setStatusFilter(nextStatusFilter);
-    });
-  };
-
-  const exportProjectsCsv = () => {
-    downloadProjectsCsv({ filteredProjects, projectTotals });
-  };
 
   const handleDelete = (project) => {
     // open confirmation modal
@@ -571,13 +534,7 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
   return (
     <section className="projects">
       <ProjectsPageHeader
-        quickFilter={quickFilter}
-        onQuickFilterChange={handleQuickFilterChange}
-        statusFilter={statusFilter}
-        onStatusFilterChange={handleStatusFilterChange}
-        statusOptions={STATUS_OPTIONS}
         onOpenCreate={() => setIsCreateOpen(true)}
-        onExportCsv={exportProjectsCsv}
       />
 
       <ProjectsPageContent

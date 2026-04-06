@@ -337,7 +337,9 @@ catalogRouter.get("/products", async (req, res) => {
               (p.image_data IS NOT NULL) AS has_image
        FROM products p
        JOIN categories c ON c.id = p.category_id
-       LEFT JOIN product_distributor_prices pdp ON pdp.product_id = p.id
+      LEFT JOIN product_distributor_prices pdp
+        ON pdp.product_id = p.id
+            AND pdp.distributor_id IS NOT DISTINCT FROM p.distributor_id
        LEFT JOIN providers pr ON pr.id = pdp.distributor_id
        ORDER BY p.created_at DESC`
     );
