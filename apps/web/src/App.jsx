@@ -263,6 +263,13 @@ function App() {
     onOpenDeviceModal: () => setIsCameraModalOpen(true),
   });
 
+  const getComponentLineTotal = useCallback((component) => {
+    const quantity = Number(component?.quantity) || 0;
+    const unit = Number(component?.unitPrice) || 0;
+    const total = Number(component?.total);
+    return Number.isFinite(total) ? total : unit * quantity;
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const media = window.matchMedia("(max-width: 900px)");
@@ -329,10 +336,7 @@ function App() {
       if (activeVersion?.locked) return;
       const snapshotComponentsTotal = boxes.reduce((sum, box) => {
         return sum + (box.components || []).reduce((componentSum, component) => {
-          const quantity = Number(component.quantity) || 1;
-          const unit = Number(component.unitPrice) || 0;
-          const base = Number(component.total);
-          return componentSum + (Number.isFinite(base) ? base : unit * quantity);
+          return componentSum + getComponentLineTotal(component);
         }, 0);
       }, 0);
       const snapshotMarginTotal = 0;
@@ -372,7 +376,7 @@ function App() {
       }
     }, 500);
     return () => clearTimeout(timeout);
-  }, [activeProjectId, boxes, cables, devices, cableTypes, accessToken, activeVersion]);
+  }, [activeProjectId, boxes, cables, devices, cableTypes, accessToken, activeVersion, getComponentLineTotal]);
 
   const restoreDesign = useCallback(async (design) => {
     const nextBoxes = Array.isArray(design?.boxes) ? design.boxes : [];
@@ -546,6 +550,7 @@ function App() {
 
   useEffect(() => {
     if (catalogCategories.length === 0) return;
+    if (componentForm.lineType === "mechanical") return;
     const nextCategory = catalog[componentForm.category] ? componentForm.category : catalogCategories[0];
     const models = catalog[nextCategory] || [];
     const currentModel =
@@ -587,7 +592,14 @@ function App() {
         tariffLabel: nextTariffLabel,
       };
     });
-  }, [catalog, catalogCategories, componentForm.category, componentForm.model, componentForm.catalogKey]);
+  }, [
+    catalog,
+    catalogCategories,
+    componentForm.category,
+    componentForm.model,
+    componentForm.catalogKey,
+    componentForm.lineType,
+  ]);
 
   const sidebarSections = useMemo(
     () => [
@@ -769,7 +781,9 @@ function App() {
     setCableTypes(normalizeCableTypes(nextTypes));
   };
 
-  const boxTotals = boxes.map((box) => box.components.reduce((sum, component) => sum + component.total, 0));
+  const boxTotals = boxes.map((box) =>
+    (box.components || []).reduce((sum, component) => sum + getComponentLineTotal(component), 0)
+  );
   const boxesTotal = boxTotals.reduce((sum, total) => sum + total, 0);
   const marginTotal = 0;
   const cablesTotal = cables.reduce((sum, cable) => sum + (Number(cable.totalPrice) || 0), 0);
@@ -801,6 +815,87 @@ function App() {
 
   const handleAddComponent = () => {
     if (!selectedBox) return;
+    const isMechanicalLine = componentForm.lineType === "mechanical";
+    const selectedBoxComponents = selectedBox.components || [];
+    const quantity = Number(componentForm.quantity) || 0;
+
+    if (isMechanicalLine) {
+      const modelName = String(componentForm.model || "").trim();
+      const unitPrice = Math.max(0, Number(componentForm.unitPrice) || 0);
+      const category = componentForm.category || "Mecánica";
+      const mechanicalPlacement = String(componentForm.mechanicalPlacement || "").trim();
+      const mechanicalMachining = String(componentForm.mechanicalMachining || "").trim();
+      const mechanicalNotes = String(componentForm.mechanicalNotes || "").trim();
+
+      const existing = selectedBoxComponents.find(
+        (component) =>
+          component.lineType === "mechanical" &&
+          component.category === category &&
+          component.model === modelName &&
+          String(component.mechanicalPlacement || "") === mechanicalPlacement &&
+          String(component.mechanicalMachining || "") === mechanicalMachining &&
+          String(component.mechanicalNotes || "") === mechanicalNotes &&
+          Number(component.unitPrice || 0) === Number(unitPrice || 0)
+      );
+
+      if (existing) {
+        const nextQuantity = (Number(existing.quantity) || 0) + quantity;
+        const applied = Boolean(existing.discountApplied);
+        const base = applied
+          ? getDiscountedUnitPrice({
+              unitPrice,
+              customerDiscountPercent: existing.customerDiscountPercent ?? 0,
+            })
+          : unitPrice;
+        const nextComponent = {
+          ...existing,
+          lineType: "mechanical",
+          category,
+          model: modelName,
+          quantity: nextQuantity,
+          unitPrice,
+          mechanicalPlacement,
+          mechanicalMachining,
+          mechanicalNotes,
+          total: base * nextQuantity,
+        };
+        updateBox(selectedBox.id, {
+          components: selectedBoxComponents.map((component) =>
+            component.id === existing.id ? nextComponent : component
+          ),
+        });
+      } else {
+        const component = {
+          id: createId(),
+          lineType: "mechanical",
+          category,
+          model: modelName,
+          quantity,
+          unitPrice,
+          discountPercent: 0,
+          customerDiscountPercent: 0,
+          discountApplied: false,
+          catalogKey: "",
+          productId: "",
+          distributorId: "",
+          distributorName: "",
+          priceHistoryId: "",
+          tariffLabel: "",
+          mechanicalPlacement,
+          mechanicalMachining,
+          mechanicalNotes,
+          productActive: true,
+          total: unitPrice * quantity,
+        };
+        updateBox(selectedBox.id, {
+          components: [...selectedBoxComponents, component],
+        });
+      }
+
+      setComponentForm(DEFAULT_COMPONENT_FORM);
+      return;
+    }
+
     const selectedModel =
       catalog[componentForm.category]?.find((item) => item.catalogKey === componentForm.catalogKey) ||
       catalog[componentForm.category]?.find((item) => item.name === componentForm.model);
@@ -813,9 +908,9 @@ function App() {
     const distributorName = selectedModel?.distributorName || componentForm.distributorName || "";
     const priceHistoryId = componentForm.priceHistoryId || selectedModel?.priceHistoryId || "";
     const tariffLabel = componentForm.tariffLabel || selectedModel?.tariffLabel || "";
-    const quantity = Number(componentForm.quantity) || 0;
-    const existing = selectedBox.components.find(
+    const existing = selectedBoxComponents.find(
       (component) =>
+        (component.lineType || "electrical") === "electrical" &&
         component.category === componentForm.category &&
         component.model === modelName &&
         String(component.catalogKey || "") === String(catalogKey) &&
@@ -832,6 +927,7 @@ function App() {
       }) : nextUnitPrice;
       const nextComponent = {
         ...existing,
+        lineType: existing.lineType || "electrical",
         unitPrice: nextUnitPrice,
         discountPercent: existing.discountPercent ?? discountPercent,
         customerDiscountPercent: existing.customerDiscountPercent ?? 0,
@@ -845,13 +941,14 @@ function App() {
         total: base * nextQuantity,
       };
       updateBox(selectedBox.id, {
-        components: selectedBox.components.map((component) =>
+        components: selectedBoxComponents.map((component) =>
           component.id === existing.id ? nextComponent : component
         ),
       });
     } else {
       const component = {
         id: createId(),
+        lineType: "electrical",
         category: componentForm.category,
         model: modelName || "",
         quantity,
@@ -865,11 +962,14 @@ function App() {
         distributorName,
         priceHistoryId,
         tariffLabel,
+        mechanicalPlacement: "",
+        mechanicalMachining: "",
+        mechanicalNotes: "",
         productActive: true,
         total: unitPrice * quantity,
       };
       updateBox(selectedBox.id, {
-        components: [...selectedBox.components, component],
+        components: [...selectedBoxComponents, component],
       });
     }
     setComponentForm(DEFAULT_COMPONENT_FORM);
@@ -894,7 +994,7 @@ function App() {
     }
     const targetBox = boxes.find((box) => box.id === boxId);
     if (!targetBox) return;
-    const nextComponents = targetBox.components.map((component) => {
+    const nextComponents = (targetBox.components || []).map((component) => {
       if (component.id !== componentId) return component;
       const discountedUnit = getDiscountedUnitPrice(component);
       const unit = nextApplied ? discountedUnit : Number(component.unitPrice) || 0;
@@ -930,7 +1030,7 @@ function App() {
     }
     const targetBox = boxes.find((box) => box.id === boxId);
     if (!targetBox) return;
-    const nextComponents = targetBox.components.map((component) => {
+    const nextComponents = (targetBox.components || []).map((component) => {
       if (component.id !== componentId) return component;
       if (!nextActive) {
         return { ...component, productActive: false, total: 0 };
@@ -968,7 +1068,7 @@ function App() {
     }
     const targetBox = boxes.find((box) => box.id === boxId);
     if (!targetBox) return;
-    const nextComponents = targetBox.components.map((component) => {
+    const nextComponents = (targetBox.components || []).map((component) => {
       if (component.id !== componentId) return component;
       const raw = percent === "" ? "" : Number(percent);
       const clamped = raw === "" ? "" : Math.max(0, Math.min(100, isNaN(raw) ? 0 : raw));
@@ -988,7 +1088,7 @@ function App() {
   const removeComponent = (componentId) => {
     if (!selectedBox) return;
     updateBox(selectedBox.id, {
-      components: selectedBox.components.filter((component) => component.id !== componentId),
+      components: (selectedBox.components || []).filter((component) => component.id !== componentId),
     });
   };
 
@@ -1012,8 +1112,13 @@ function App() {
 
   const getComponentErrors = () => {
     const errors = [];
-    if (!componentForm.category) errors.push("Selecciona una categoría.");
-    if (!componentForm.model) errors.push("Selecciona un modelo.");
+    if (componentForm.lineType === "mechanical") {
+      if (!String(componentForm.model || "").trim()) errors.push("Selecciona un elemento mecánico.");
+      if (Number(componentForm.unitPrice) < 0) errors.push("Precio unitario inválido.");
+    } else {
+      if (!componentForm.category) errors.push("Selecciona una categoría.");
+      if (!componentForm.model) errors.push("Selecciona un modelo.");
+    }
     if (Number(componentForm.quantity) <= 0) errors.push("Cantidad mínima 1.");
     return errors;
   };
@@ -1041,7 +1146,7 @@ function App() {
   };
 
   const renderBoxLabel = (box) => {
-    const total = (box.components || []).reduce((sum, component) => sum + (component.total || 0), 0);
+    const total = (box.components || []).reduce((sum, component) => sum + getComponentLineTotal(component), 0);
     const nameMaxChars = Math.max(6, Math.floor((box.width || 140) / 9));
     const nameText = truncateText(box.name, nameMaxChars);
     const labelFontSize = (box.height || 100) < 80 ? 10 : 12;

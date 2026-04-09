@@ -66,11 +66,23 @@ export default function CanvasPartsListView({
                     <div className="canvas__parts-group-body">
                       {group.items.map((row) => {
                         const discountedUnit = getDiscountedUnitPrice(row);
+                        const mechanicalMeta = [
+                          row.mechanicalPlacement ? `Ubicación: ${row.mechanicalPlacement}` : "",
+                          row.mechanicalMachining ? `Mecanizado: ${row.mechanicalMachining}` : "",
+                          row.mechanicalNotes ? row.mechanicalNotes : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ");
 
                         return (
                           <div key={row.id} className="canvas__parts-row canvas__parts-row--child">
                             <span className="canvas__parts-category">{row.category}</span>
-                            <span className="canvas__parts-model">{row.model}</span>
+                            <span className="canvas__parts-model">
+                              {row.model}
+                              {row.lineType === "mechanical" && mechanicalMeta ? (
+                                <span className="canvas__parts-model-meta">{mechanicalMeta}</span>
+                              ) : null}
+                            </span>
                             <span>{row.quantity}</span>
                             <span>€{Number(row.unitPrice || 0).toFixed(2)}</span>
                             <input

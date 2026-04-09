@@ -71,8 +71,19 @@ function ProjectCard({
     setEditingVersionId(null);
     setEditingName('');
   };
+
+  const handleCardClick = (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest('.projects__versions')) return;
+    if (target.closest('button, input, textarea, select, a, [role="button"], [data-no-card-toggle="true"]')) {
+      return;
+    }
+    onToggleVersions?.(project);
+  };
+
   return (
-    <div className="projects__card">
+    <div className="projects__card" onClick={handleCardClick}>
       <ProjectCardInfoPanel
         project={project}
         total={total}

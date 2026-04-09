@@ -30,6 +30,7 @@ const buildRowsFromDesign = (design = {}) => {
     const boxName = normalizeText(box?.name, "Cuadro");
     (box?.components || []).forEach((component) => {
       if (component?.productActive === false) return;
+      const lineType = component?.lineType === "mechanical" ? "mechanical" : "component";
       const quantity = Math.max(0, asNumber(component?.quantity, 1) || 1);
       const unitPrice = Math.max(0, asNumber(component?.unitPrice, 0));
       const discountApplied = Boolean(component?.discountApplied);
@@ -42,10 +43,22 @@ const buildRowsFromDesign = (design = {}) => {
         roundMoney(component?.total ?? effectiveUnitPrice * quantity)
       );
 
+      const modelBase = normalizeText(
+        component?.model,
+        lineType === "mechanical" ? "Elemento mecánico" : "Componente"
+      );
+      const detailParts = [];
+      const placement = normalizeText(component?.mechanicalPlacement);
+      const machining = normalizeText(component?.mechanicalMachining);
+      const notes = normalizeText(component?.mechanicalNotes);
+      if (placement) detailParts.push(`Ubicación: ${placement}`);
+      if (machining) detailParts.push(`Mecanizado: ${machining}`);
+      if (notes) detailParts.push(`Nota: ${notes}`);
+
       rows.push({
-        kind: "component",
-        category: normalizeText(component?.category, boxName),
-        model: normalizeText(component?.model, "Componente"),
+        kind: lineType,
+        category: normalizeText(component?.category, lineType === "mechanical" ? "Mecánica" : boxName),
+        model: detailParts.length ? `${modelBase} (${detailParts.join(" · ")})` : modelBase,
         unit: "ud",
         quantity,
         unitPrice: effectiveUnitPrice,

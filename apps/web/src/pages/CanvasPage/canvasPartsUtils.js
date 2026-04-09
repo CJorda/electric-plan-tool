@@ -2,10 +2,10 @@ export const buildGroupedRows = (boxes, devices) => {
   const groups = boxes.map((box) => ({
     boxId: box.id,
     boxName: box.name,
-    items: box.components.map((component) => ({
+    items: (box.components || []).map((component) => ({
       boxId: box.id,
       boxName: box.name,
-      type: "component",
+      type: component.lineType === "mechanical" ? "mechanical" : "component",
       ...component,
     })),
   }));
@@ -46,6 +46,12 @@ const buildBomRows = (groupedRows) => {
   const rows = [];
   groupedRows.forEach((group) => {
     group.items.forEach((item) => {
+      const lineType = item.lineType === "mechanical" ? "mechanical" : item.type || "component";
+      const modelBase = item.model || item.name || "";
+      const detailParts = [];
+      if (item.mechanicalPlacement) detailParts.push(`Ubicación: ${item.mechanicalPlacement}`);
+      if (item.mechanicalMachining) detailParts.push(`Mecanizado: ${item.mechanicalMachining}`);
+      if (item.mechanicalNotes) detailParts.push(item.mechanicalNotes);
       const unitPrice = Number(item.unitPrice) || 0;
       const percent = Number(item.customerDiscountPercent) || 0;
       const discountApplied = Boolean(item.discountApplied);
@@ -56,14 +62,14 @@ const buildBomRows = (groupedRows) => {
         boxId: group.boxId,
         boxName: group.boxName,
         category: item.category || group.boxName || "",
-        model: item.model || item.name || "",
+        model: detailParts.length ? `${modelBase} (${detailParts.join(" · ")})` : modelBase,
         quantity,
         unitPrice: unitPrice.toFixed(2),
         customerDiscountPercent: percent,
         discountApplied,
         unitPriceWithDiscount: discountedUnit.toFixed(2),
         total: Number(total).toFixed(2),
-        type: item.type || "component",
+        type: lineType,
       });
     });
   });

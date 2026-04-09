@@ -8,6 +8,7 @@ export const MODES = [
 ];
 
 export const DEFAULT_COMPONENT_FORM = {
+  lineType: "electrical",
   category: "",
   model: "",
   quantity: 1,
@@ -18,6 +19,9 @@ export const DEFAULT_COMPONENT_FORM = {
   distributorName: "",
   priceHistoryId: "",
   tariffLabel: "",
+  mechanicalPlacement: "",
+  mechanicalMachining: "",
+  mechanicalNotes: "",
 };
 
 export const STATUS_OPTIONS = [

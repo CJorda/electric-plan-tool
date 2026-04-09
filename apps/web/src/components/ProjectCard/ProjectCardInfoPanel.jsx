@@ -16,6 +16,8 @@ export default function ProjectCardInfoPanel({
   onAttachments,
   onDelete,
 }) {
+  const projectStatus = project.status || "draft";
+
   return (
     <>
       <div className="projects__info">
@@ -44,7 +46,9 @@ export default function ProjectCardInfoPanel({
           ) : (
             <strong className="projects__name">{project.name}</strong>
           )}
-          {!hideStatusControls && <ProjectStatusBadge status={project.status || "draft"} />}
+          {!hideStatusControls && projectStatus !== "confirmed" && (
+            <ProjectStatusBadge status={projectStatus} />
+          )}
         </div>
         <div className="projects__meta">
           {project.created_at && <span>Creado: {new Date(project.created_at).toLocaleDateString()}</span>}

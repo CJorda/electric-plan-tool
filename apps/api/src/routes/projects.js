@@ -426,11 +426,17 @@ projectsRouter.get("/:projectId/quote", async (req, res) => {
     const items = [];
     (design.boxes || []).forEach((box) => {
       (box.components || []).forEach((c) => {
+        const lineType = c?.lineType === 'mechanical' ? 'mechanical' : 'component';
+        const detailParts = [];
+        if (c?.mechanicalPlacement) detailParts.push(`Ubicación: ${String(c.mechanicalPlacement).trim()}`);
+        if (c?.mechanicalMachining) detailParts.push(`Mecanizado: ${String(c.mechanicalMachining).trim()}`);
+        if (c?.mechanicalNotes) detailParts.push(`Nota: ${String(c.mechanicalNotes).trim()}`);
+        const baseModel = c.model || c.name || (lineType === 'mechanical' ? 'Elemento mecánico' : 'Componente');
         items.push({
-          type: 'component',
+          type: lineType,
           boxId: box.id,
           boxName: box.name,
-          model: c.model || c.name,
+          model: detailParts.length ? `${baseModel} (${detailParts.join(' · ')})` : baseModel,
           quantity: Number(c.quantity) || 1,
           unitPrice: Number(c.unitPrice) || 0,
           customerDiscountPercent: Number(c.customerDiscountPercent) || 0,
@@ -489,8 +495,13 @@ projectsRouter.get("/:projectId/quote.pdf", async (req, res) => {
     const items = [];
     (design.boxes || []).forEach((box) => {
       (box.components || []).forEach((c) => {
+        const detailParts = [];
+        if (c?.mechanicalPlacement) detailParts.push(`Ubicación: ${String(c.mechanicalPlacement).trim()}`);
+        if (c?.mechanicalMachining) detailParts.push(`Mecanizado: ${String(c.mechanicalMachining).trim()}`);
+        if (c?.mechanicalNotes) detailParts.push(`Nota: ${String(c.mechanicalNotes).trim()}`);
+        const baseDesc = c.model || c.name || (c?.lineType === 'mechanical' ? 'Elemento mecánico' : 'Componente');
         items.push({
-          desc: c.model || c.name,
+          desc: detailParts.length ? `${baseDesc} (${detailParts.join(' · ')})` : baseDesc,
           qty: Number(c.quantity) || 1,
           unit: Number(c.unitPrice) || 0,
           total: Number(c.total) || ((Number(c.unitPrice) || 0) * (Number(c.quantity) || 1)),

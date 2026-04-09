@@ -329,6 +329,14 @@
 
 .canvas__parts-model {
   color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.canvas__parts-model-meta {
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .canvas__parts-input {

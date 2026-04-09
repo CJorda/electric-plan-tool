@@ -32,6 +32,17 @@ function CanvasStage({
   renderCableLabelPosition,
   renderBoxLabel,
 }) {
+  const getComponentLineTotal = (component) => {
+    const quantity = Number(component?.quantity) || 0;
+    const unit = Number(component?.unitPrice) || 0;
+    const total = Number(component?.total);
+    return Number.isFinite(total) ? total : unit * quantity;
+  };
+
+  const tooltipComponents = Array.isArray(tooltip?.box?.components) ? tooltip.box.components : [];
+  const tooltipMechanicalCount = tooltipComponents.filter((component) => component.lineType === "mechanical").length;
+  const tooltipTotal = tooltipComponents.reduce((sum, component) => sum + getComponentLineTotal(component), 0);
+
   return (
     <main className="canvas">
       {/* Toolbar is intentionally rendered by the page container (CanvasPage) */}
@@ -217,10 +228,15 @@ function CanvasStage({
               <div className="canvas__tooltip-row">Zona: {tooltip.box.zone}</div>
             )}
             <div className="canvas__tooltip-row">
-              Componentes: <strong>{tooltip.box.components.length}</strong>
+              Piezas: <strong>{tooltipComponents.length}</strong>
             </div>
+            {tooltipMechanicalCount > 0 ? (
+              <div className="canvas__tooltip-row">
+                Mecánica: <strong>{tooltipMechanicalCount}</strong>
+              </div>
+            ) : null}
             <div className="canvas__tooltip-row">
-              Total: <strong>€{tooltip.box.components.reduce((sum, c) => sum + c.total, 0).toFixed(2)}</strong>
+              Total: <strong>€{tooltipTotal.toFixed(2)}</strong>
             </div>
             <div className="canvas__tooltip-row">
               Tamaño: {tooltip.box.width} x {tooltip.box.height}px
