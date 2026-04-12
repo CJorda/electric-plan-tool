@@ -1,10 +1,30 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../lib/api.js";
 
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const round2 = (value) => Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
+
+const getDiscountPrice = (baseValue, percentValue) => {
+  const base = Math.max(0, toNumber(baseValue));
+  const percent = Math.max(0, Math.min(100, toNumber(percentValue)));
+  return round2(base * (1 - percent / 100));
+};
+
+const getDiscountPercent = (baseValue, discountedValue) => {
+  const base = Math.max(0, toNumber(baseValue));
+  const discounted = Math.max(0, toNumber(discountedValue));
+  if (base <= 0) return 0;
+  return round2(Math.max(0, ((base - discounted) / base) * 100));
+};
+
 const normalizeProductWithDiscountPercent = (item) => {
   const base = Number(item?.distributorPrice) || 0;
   const discount = Number(item?.discountPrice) || 0;
-  const percent = base > 0 ? Math.max(0, ((base - discount) / base) * 100) : 0;
+  const percent = getDiscountPercent(base, discount);
   return { ...item, discountPercent: percent };
 };
 
@@ -540,7 +560,7 @@ function useCatalog({ authToken = "" } = {}) {
     if (!productForm.name.trim() || !productForm.category) return;
     const distributorPrice = Number(productForm.distributorPrice) || 0;
     const discountPercent = Number(productForm.discountPercent) || 0;
-    const discountPrice = Math.max(0, distributorPrice * (1 - discountPercent / 100));
+    const discountPrice = getDiscountPrice(distributorPrice, discountPercent);
     const payload = {
       category: productForm.category,
       name: productForm.name,
@@ -579,9 +599,7 @@ function useCatalog({ authToken = "" } = {}) {
       });
       if (!response.ok) throw new Error("Error creando producto");
       const created = await response.json();
-      const percent = created.distributorPrice
-        ? Math.max(0, ((created.distributorPrice - created.discountPrice) / created.distributorPrice) * 100)
-        : 0;
+      const percent = getDiscountPercent(created.distributorPrice, created.discountPrice);
       setProducts((prev) => [{ ...created, discountPercent: percent }, ...prev]);
       setProductForm({
         category: productForm.category,
@@ -649,7 +667,7 @@ function useCatalog({ authToken = "" } = {}) {
     if (updates.distributorPrice !== undefined || updates.discountPercent !== undefined) {
       const base = Number(nextProduct.distributorPrice) || 0;
       const percent = Number(nextProduct.discountPercent) || 0;
-      nextProduct.discountPrice = Math.max(0, base * (1 - percent / 100));
+      nextProduct.discountPrice = getDiscountPrice(base, percent);
     }
     if (!apiEnabled) {
       setProducts((prev) =>

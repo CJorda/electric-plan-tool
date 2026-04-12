@@ -16,12 +16,25 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const getDiscountedPrice = (pvp, discountPercent) => {
+const roundCurrency = (value) => Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
+
+const getDiscountedBasePrice = (pvp, discountPercent) => {
   const base = toNumber(pvp);
   const percent = toNumber(discountPercent);
   if (base <= 0) return 0;
   const raw = base * (1 - percent / 100);
-  return Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  return Number.isFinite(raw) ? roundCurrency(Math.max(0, raw)) : 0;
+};
+
+const getPriceWithShipping = (priceValue, shippingCostValue) => {
+  const price = Math.max(0, toNumber(priceValue));
+  const shipping = Math.max(0, toNumber(shippingCostValue));
+  return roundCurrency(price + shipping);
+};
+
+const getDiscountedPrice = (pvp, discountPercent, shippingCost = 0) => {
+  const discountedBase = getDiscountedBasePrice(pvp, discountPercent);
+  return getPriceWithShipping(discountedBase, shippingCost);
 };
 
 const formatCurrency = (value) => `${(Number(value) || 0).toFixed(2)} €`;
@@ -193,7 +206,10 @@ function ProductsSection({
       const results = await Promise.all(
         pending.map(async (product) => {
           const key = buildPriceEvolutionKey(product.id, product.distributorId || "");
-          const fallbackPrice = Number(product.discountPrice ?? product.distributorPrice) || 0;
+          const fallbackPrice = getPriceWithShipping(
+            product.discountPrice ?? product.distributorPrice,
+            product.shippingCost
+          );
 
           try {
             let items = await onLoadProductPriceHistory(product.id, product.distributorId || "");
@@ -205,7 +221,9 @@ function ProductsSection({
             }
             const ordered = Array.isArray(items) ? [...items].reverse() : [];
             const points = ordered
-              .map((entry) => Number(entry.discountPrice ?? entry.distributorPrice))
+              .map((entry) =>
+                getPriceWithShipping(entry.discountPrice ?? entry.distributorPrice, entry.shippingCost)
+              )
               .filter((value) => Number.isFinite(value));
 
             if (points.length === 0) {
@@ -243,19 +261,21 @@ function ProductsSection({
   const priceHistoryWithDelta = useMemo(() => {
     return priceHistoryItems.map((item, index) => {
       const nextItem = priceHistoryItems[index + 1] || null;
-      const basePrice = Number(item.distributorPrice) || 0;
-      const currentPrice = Number(item.discountPrice ?? item.distributorPrice) || 0;
+      const basePriceRaw = Number(item.distributorPrice) || 0;
+      const currentPriceRaw = Number(item.discountPrice ?? item.distributorPrice) || 0;
+      const basePrice = getPriceWithShipping(basePriceRaw, item.shippingCost);
+      const currentPrice = getPriceWithShipping(currentPriceRaw, item.shippingCost);
       const previousPrice = nextItem
-        ? Number(nextItem.discountPrice ?? nextItem.distributorPrice) || 0
+        ? getPriceWithShipping(nextItem.discountPrice ?? nextItem.distributorPrice, nextItem.shippingCost)
         : null;
-      const delta = previousPrice == null ? null : currentPrice - previousPrice;
+      const delta = previousPrice == null ? null : roundCurrency(currentPrice - previousPrice);
       const deltaPercent =
         previousPrice && previousPrice !== 0 && delta != null
           ? (delta / previousPrice) * 100
           : null;
       const discountPercent =
-        basePrice > 0
-          ? Math.max(0, ((basePrice - currentPrice) / basePrice) * 100)
+        basePriceRaw > 0
+          ? roundCurrency(Math.max(0, ((basePriceRaw - currentPriceRaw) / basePriceRaw) * 100))
           : 0;
       return {
         ...item,
@@ -400,7 +420,7 @@ function ProductsSection({
       serial: detailForm.serial,
       distributorPrice,
       discountPercent,
-      discountPrice: getDiscountedPrice(distributorPrice, discountPercent),
+      discountPrice: getDiscountedBasePrice(distributorPrice, discountPercent),
       shippingCost: toNumber(detailForm.shippingCost),
       leadTime: detailForm.leadTime,
     });
@@ -423,7 +443,7 @@ function ProductsSection({
       const updated = await onCreateProductTariff(selectedProduct.id, {
         distributorId: detailForm.distributorId,
         distributorPrice,
-        discountPrice: getDiscountedPrice(distributorPrice, discountPercent),
+        discountPrice: getDiscountedBasePrice(distributorPrice, discountPercent),
         shippingCost: toNumber(detailForm.shippingCost),
         leadTime: detailForm.leadTime,
         note: tariffNote,
@@ -573,7 +593,8 @@ function ProductsSection({
         imageInputId="create-product-image"
         discountedPrice={getDiscountedPrice(
           productForm.distributorPrice,
-          productForm.discountPercent
+          productForm.discountPercent,
+          productForm.shippingCost
         ).toFixed(2)}
         saveLabel="Guardar"
         canSave={Boolean(productForm.name?.trim()) && Boolean(productForm.category)}
@@ -605,7 +626,11 @@ function ProductsSection({
         imageInputId="detail-product-image"
         discountedPrice={
           detailForm
-            ? getDiscountedPrice(detailForm.distributorPrice, detailForm.discountPercent).toFixed(2)
+            ? getDiscountedPrice(
+                detailForm.distributorPrice,
+                detailForm.discountPercent,
+                detailForm.shippingCost
+              ).toFixed(2)
             : "0.00"
         }
         saveLabel="Guardar cambios"

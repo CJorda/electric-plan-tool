@@ -167,7 +167,11 @@ export default function ProductsListContent({
               <span className="products__compact-text">{product.manufacturer || "-"}</span>
 
               <span className="products__price-pill">
-                €{calculateDiscountedPrice(product.distributorPrice, product.discountPercent ?? 0).toFixed(2)}
+                €{calculateDiscountedPrice(
+                  product.distributorPrice,
+                  product.discountPercent ?? 0,
+                  product.shippingCost ?? 0
+                ).toFixed(2)}
               </span>
 
               <PriceEvolutionSparkline

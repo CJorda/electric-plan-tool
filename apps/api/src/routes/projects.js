@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
-import { query, ensureProjectAttachmentsTable, ensureQuoteVerificationTable } from "../db.js";
+import {
+  query,
+  ensureClientsTable,
+  ensureProjectAttachmentsTable,
+  ensureQuoteVerificationTable,
+} from "../db.js";
 import { createHash, randomUUID } from "crypto";
 import { buildQuotePdfBuffer } from "../lib/quotePdf.js";
 import {
@@ -17,6 +22,7 @@ projectsRouter.use(requireAuth);
 const projectSchema = z.object({
   name: z.string().min(1),
   type: z.string().min(1),
+  clientId: z.string().uuid().optional().nullable(),
   client: z.string().optional().nullable(),
   reference: z.string().optional().nullable(),
   address: z.string().optional().nullable(),
@@ -65,16 +71,85 @@ const quoteVerificationPayloadSchema = z
   );
 
 const ensureProjectColumns = async () => {
+  await ensureClientsTable();
+  await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS client_id uuid");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS client text");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS reference text");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS address text");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS versions jsonb");
+  await query(
+    `DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'projects_client_id_fkey'
+      ) THEN
+        ALTER TABLE projects
+          ADD CONSTRAINT projects_client_id_fkey
+          FOREIGN KEY (client_id)
+          REFERENCES clients(id)
+          ON DELETE SET NULL;
+      END IF;
+    END
+    $$;`
+  );
+  await query("CREATE INDEX IF NOT EXISTS idx_projects_client_id ON projects(client_id)");
+  await query(
+    `UPDATE projects p
+     SET client_id = c.id
+     FROM clients c
+     WHERE p.client_id IS NULL
+       AND p.client IS NOT NULL
+       AND LOWER(p.client) = LOWER(c.name)`
+  );
 };
 
 const parseCreatedAt = (value) => {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+const normalizeNullableText = (value) => {
+  const normalized = String(value ?? "").trim();
+  return normalized.length ? normalized : null;
+};
+
+const resolveProjectClient = async ({ clientId, clientName }) => {
+  const normalizedClientId = normalizeNullableText(clientId);
+  const normalizedClientName = normalizeNullableText(clientName);
+
+  if (normalizedClientId) {
+    const result = await query("SELECT id, name FROM clients WHERE id = $1", [normalizedClientId]);
+    if (!result.rows.length) {
+      return { error: "Cliente no encontrado" };
+    }
+    return {
+      clientId: result.rows[0].id,
+      clientName: result.rows[0].name,
+    };
+  }
+
+  if (!normalizedClientName) {
+    return { clientId: null, clientName: null };
+  }
+
+  const result = await query(
+    `SELECT id, name
+     FROM clients
+     WHERE LOWER(name) = LOWER($1)
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [normalizedClientName]
+  );
+
+  if (!result.rows.length) {
+    return { clientId: null, clientName: normalizedClientName };
+  }
+
+  return {
+    clientId: result.rows[0].id,
+    clientName: result.rows[0].name,
+  };
 };
 
 const decodeDataUrl = (dataUrl = "") => {
@@ -114,7 +189,22 @@ projectsRouter.get("/", async (req, res) => {
   try {
     await ensureProjectColumns();
     const result = await query(
-      "SELECT id, name, type, client, reference, address, notes, status, created_at, updated_at, COALESCE(jsonb_array_length(versions), 0) AS versions_count FROM projects ORDER BY created_at DESC"
+      `SELECT
+         p.id,
+         p.name,
+         p.type,
+         p.client_id,
+         COALESCE(c.name, p.client) AS client,
+         p.reference,
+         p.address,
+         p.notes,
+         p.status,
+         p.created_at,
+         p.updated_at,
+         COALESCE(jsonb_array_length(p.versions), 0) AS versions_count
+       FROM projects p
+       LEFT JOIN clients c ON c.id = p.client_id
+       ORDER BY p.created_at DESC`
     );
     res.json({ items: result.rows });
   } catch (error) {
@@ -322,17 +412,32 @@ projectsRouter.post("/", async (req, res) => {
     return res.status(400).json({ error: "Datos inválidos", details: parsed.error.format() });
   }
 
-  const { name, type, client, reference, address, notes, status, createdAt } = parsed.data;
+  const { name, type, clientId, client, reference, address, notes, status, createdAt } = parsed.data;
   const id = randomUUID();
   try {
     await ensureProjectColumns();
+    const resolvedClient = await resolveProjectClient({ clientId, clientName: client });
+    if (resolvedClient.error) {
+      return res.status(400).json({ error: resolvedClient.error });
+    }
     console.time('[projects] insert');
     const createdAtValue = parseCreatedAt(createdAt);
     const result = await query(
-      `INSERT INTO projects (id, name, type, client, reference, address, notes, status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, NOW()), NOW())
-       RETURNING id, name, type, client, reference, address, notes, status, created_at, updated_at`,
-      [id, name, type, client ?? null, reference ?? null, address ?? null, notes ?? null, status, createdAtValue]
+      `INSERT INTO projects (id, name, type, client_id, client, reference, address, notes, status, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, NOW()), NOW())
+       RETURNING id, name, type, client_id, client, reference, address, notes, status, created_at, updated_at`,
+      [
+        id,
+        name,
+        type,
+        resolvedClient.clientId,
+        resolvedClient.clientName,
+        reference ?? null,
+        address ?? null,
+        notes ?? null,
+        status,
+        createdAtValue,
+      ]
     );
     console.timeEnd('[projects] insert');
     res.status(201).json(result.rows[0]);
@@ -366,7 +471,22 @@ projectsRouter.get("/:projectId", async (req, res) => {
   try {
     await ensureProjectColumns();
     const result = await query(
-      "SELECT id, name, type, client, reference, address, notes, status, created_at, updated_at, COALESCE(jsonb_array_length(versions), 0) AS versions_count FROM projects WHERE id = $1",
+      `SELECT
+         p.id,
+         p.name,
+         p.type,
+         p.client_id,
+         COALESCE(c.name, p.client) AS client,
+         p.reference,
+         p.address,
+         p.notes,
+         p.status,
+         p.created_at,
+         p.updated_at,
+         COALESCE(jsonb_array_length(p.versions), 0) AS versions_count
+       FROM projects p
+       LEFT JOIN clients c ON c.id = p.client_id
+       WHERE p.id = $1`,
       [req.params.projectId]
     );
     if (result.rows.length === 0) {
@@ -415,7 +535,19 @@ projectsRouter.get("/:projectId/quote", async (req, res) => {
     }
     await ensureProjectColumns();
     const result = await query(
-      "SELECT id, name, type, client, reference, address, notes, status, design FROM projects WHERE id = $1",
+      `SELECT
+         p.id,
+         p.name,
+         p.type,
+         COALESCE(c.name, p.client) AS client,
+         p.reference,
+         p.address,
+         p.notes,
+         p.status,
+         p.design
+       FROM projects p
+       LEFT JOIN clients c ON c.id = p.client_id
+       WHERE p.id = $1`,
       [req.params.projectId]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: "Proyecto no encontrado" });
@@ -486,7 +618,19 @@ projectsRouter.get("/:projectId/quote.pdf", async (req, res) => {
     }
     await ensureProjectColumns();
     const result = await query(
-      "SELECT id, name, type, client, reference, address, notes, status, design FROM projects WHERE id = $1",
+      `SELECT
+         p.id,
+         p.name,
+         p.type,
+         COALESCE(c.name, p.client) AS client,
+         p.reference,
+         p.address,
+         p.notes,
+         p.status,
+         p.design
+       FROM projects p
+       LEFT JOIN clients c ON c.id = p.client_id
+       WHERE p.id = $1`,
       [req.params.projectId]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: "Proyecto no encontrado" });
@@ -959,15 +1103,37 @@ projectsRouter.put("/:projectId", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: "Datos inválidos", details: parsed.error.format() });
   }
-  const { name, type, client, reference, address, notes, status } = parsed.data;
+  const { name, type, clientId, client, reference, address, notes, status } = parsed.data;
   try {
     await ensureProjectColumns();
+    const resolvedClient = await resolveProjectClient({ clientId, clientName: client });
+    if (resolvedClient.error) {
+      return res.status(400).json({ error: resolvedClient.error });
+    }
     const result = await query(
       `UPDATE projects
-       SET name = $1, type = $2, client = $3, reference = $4, address = $5, notes = $6, status = $7, updated_at = NOW()
-       WHERE id = $8
-       RETURNING id, name, type, client, reference, address, notes, status, created_at, updated_at`,
-      [name, type, client ?? null, reference ?? null, address ?? null, notes ?? null, status, req.params.projectId]
+       SET name = $1,
+           type = $2,
+           client_id = $3,
+           client = $4,
+           reference = $5,
+           address = $6,
+           notes = $7,
+           status = $8,
+           updated_at = NOW()
+       WHERE id = $9
+       RETURNING id, name, type, client_id, client, reference, address, notes, status, created_at, updated_at`,
+      [
+        name,
+        type,
+        resolvedClient.clientId,
+        resolvedClient.clientName,
+        reference ?? null,
+        address ?? null,
+        notes ?? null,
+        status,
+        req.params.projectId,
+      ]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Proyecto no encontrado" });

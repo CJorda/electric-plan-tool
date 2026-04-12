@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { apiFetch } from "../lib/api.js";
 
 const createId = () => {
   if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
@@ -46,32 +47,65 @@ const DEMO_CLIENTS = [
   },
 ];
 
-export default function useClients() {
-  const [clients, setClients] = useState(() => {
-    try {
-      const stored = localStorage.getItem("clients");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-        localStorage.setItem("clients", JSON.stringify(DEMO_CLIENTS));
-        return DEMO_CLIENTS;
+const readLocalClients = () => {
+  try {
+    const stored = localStorage.getItem("clients");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed;
       }
-      localStorage.setItem("clients", JSON.stringify(DEMO_CLIENTS));
-      return DEMO_CLIENTS;
-    } catch {
-      return DEMO_CLIENTS;
     }
-  });
+  } catch {
+    // ignore
+  }
+  return DEMO_CLIENTS;
+};
+
+const persistLocalClients = (items) => {
+  try {
+    localStorage.setItem("clients", JSON.stringify(items));
+  } catch {
+    // ignore persistence errors
+  }
+};
+
+const toClientPayload = (client) => ({
+  name: String(client?.name || "").trim(),
+  contactName: String(client?.contactName || "").trim(),
+  email: String(client?.email || "").trim(),
+  phone: String(client?.phone || "").trim(),
+  address: String(client?.address || "").trim(),
+  notes: String(client?.notes || "").trim(),
+});
+
+export default function useClients({ apiEnabled = import.meta.env.VITE_API_ENABLED !== "false", authToken = "" } = {}) {
+  const [clients, setClients] = useState(() => readLocalClients());
   const [clientForm, setClientForm] = useState(EMPTY_FORM);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("clients", JSON.stringify(clients));
-    } catch {
-      // ignore persistence errors
+  const loadClients = useCallback(async () => {
+    if (!apiEnabled) {
+      setClients(readLocalClients());
+      return;
     }
+    try {
+      const response = await apiFetch("/api/clients", {}, authToken);
+      if (!response.ok) throw new Error("Error listando clientes");
+      const data = await response.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+      setClients(items);
+      persistLocalClients(items);
+    } catch {
+      setClients(readLocalClients());
+    }
+  }, [apiEnabled, authToken]);
+
+  useEffect(() => {
+    void loadClients();
+  }, [loadClients]);
+
+  useEffect(() => {
+    persistLocalClients(clients);
   }, [clients]);
 
   const normalizedForm = useMemo(
@@ -86,32 +120,97 @@ export default function useClients() {
     [clientForm]
   );
 
-  const handleAddClient = () => {
+  const createLocalClient = (payload) => {
+    const created = {
+      id: createId(),
+      ...payload,
+    };
+    setClients((prev) => [created, ...prev]);
+    return created;
+  };
+
+  const handleAddClient = async () => {
     if (!normalizedForm.name || !normalizedForm.contactName) return;
-    setClients((prev) => [
-      {
-        id: createId(),
-        ...normalizedForm,
-      },
-      ...prev,
-    ]);
+
+    const payload = toClientPayload(normalizedForm);
+
+    if (!apiEnabled) {
+      createLocalClient(payload);
+      setClientForm(EMPTY_FORM);
+      return;
+    }
+
+    try {
+      const response = await apiFetch(
+        "/api/clients",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        authToken
+      );
+      if (!response.ok) throw new Error("Error creando cliente");
+      const created = await response.json();
+      setClients((prev) => [created, ...prev]);
+    } catch {
+      createLocalClient(payload);
+    }
+
     setClientForm(EMPTY_FORM);
   };
 
-  const updateClient = (clientId, updates) => {
+  const updateClient = async (clientId, updates) => {
+    const current = clients.find((client) => client.id === clientId);
+    const nextClient = { ...current, ...updates };
+
     setClients((prev) =>
       prev.map((client) => {
         if (client.id !== clientId) return client;
-        return {
-          ...client,
-          ...updates,
-        };
+        return nextClient;
       })
     );
+
+    if (!apiEnabled) return;
+
+    try {
+      const response = await apiFetch(
+        `/api/clients/${clientId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(toClientPayload(nextClient)),
+        },
+        authToken
+      );
+      if (!response.ok) throw new Error("Error actualizando cliente");
+      const updated = await response.json();
+      setClients((prev) =>
+        prev.map((client) => (client.id === clientId ? updated : client))
+      );
+    } catch {
+      // keep optimistic local update
+    }
   };
 
-  const deleteClient = (clientId) => {
+  const deleteClient = async (clientId) => {
+    const previous = clients;
     setClients((prev) => prev.filter((client) => client.id !== clientId));
+
+    if (!apiEnabled) return;
+
+    try {
+      const response = await apiFetch(
+        `/api/clients/${clientId}`,
+        {
+          method: "DELETE",
+        },
+        authToken
+      );
+      if (!response.ok) throw new Error("Error eliminando cliente");
+    } catch {
+      setClients(previous);
+    }
   };
 
   return {

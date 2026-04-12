@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import cookieParser from "cookie-parser";
 
 import { authRouter } from "./routes/auth.js";
+import { clientsRouter } from "./routes/clients.js";
 import { projectsRouter } from "./routes/projects.js";
 import { catalogRouter } from "./routes/catalog.js";
 import { reportsRouter } from "./routes/reports.js";
@@ -91,6 +92,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 app.use("/api/auth", authRouter);
+app.use("/api/clients", clientsRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api/catalog", catalogRouter);
 app.use("/api/reports", reportsRouter);

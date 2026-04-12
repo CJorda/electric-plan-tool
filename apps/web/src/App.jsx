@@ -29,6 +29,9 @@ const DEFAULT_CABLE_FORM = {
   totalPrice: 0,
 };
 
+const roundCurrency = (value) =>
+  Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+
 const CatalogPage = lazy(() => import("./pages/CatalogPage/CatalogPage.jsx"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage/DashboardPage.jsx"));
 const CanvasPage = lazy(() => import("./pages/CanvasPage/CanvasPage.jsx"));
@@ -129,7 +132,7 @@ function App() {
     setActiveMode(mode);
   };
   const [activeSection, setActiveSection] = useState("Inicio");
-  const [activeSubsection, setActiveSubsection] = useState("Productos");
+  const [activeSubsection, setActiveSubsection] = useState("");
   const [openSection, setOpenSection] = useState("Inicio");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isProjectDesignMode, setIsProjectDesignMode] = useState(false);
@@ -200,7 +203,10 @@ function App() {
     handleAddClient,
     updateClient,
     deleteClient,
-  } = useClients();
+  } = useClients({
+    apiEnabled: import.meta.env.VITE_API_ENABLED !== "false",
+    authToken: accessToken,
+  });
 
   const { projects, isLoading: isProjectsLoading } = useProjects({
     apiEnabled: import.meta.env.VITE_API_ENABLED !== "false",
@@ -514,7 +520,11 @@ function App() {
     });
     const seenByCategory = new Map();
     products.forEach((product) => {
-      const price = Number(product.discountPrice) > 0 ? product.discountPrice : product.distributorPrice;
+      const discountedOrBase = Number(product.discountPrice) > 0
+        ? product.discountPrice
+        : product.distributorPrice;
+      const shipping = Math.max(0, Number(product.shippingCost) || 0);
+      const price = roundCurrency((Number(discountedOrBase) || 0) + shipping);
       const categoryName = product.category || "Sin categoría";
       if (!map[categoryName]) map[categoryName] = [];
       const seen = seenByCategory.get(categoryName) || new Set();
@@ -725,16 +735,22 @@ function App() {
         setIsProjectDesignMode(false);
         setIsPartsListOpen(false);
       } },
-      { label: activeSection, onClick: () => {
-        setActiveSection(activeSection);
-        const nextSub =
-          sidebarSections.find((section) => section.title === activeSection)?.items?.[0] || "";
-        setActiveSubsection(nextSub);
-        setOpenSection(activeSection);
-        setIsProjectDesignMode(false);
-        setIsPartsListOpen(false);
-      } },
     ];
+
+    if (activeSection !== "Inicio") {
+      items.push({
+        label: activeSection,
+        onClick: () => {
+          setActiveSection(activeSection);
+          const nextSub =
+            sidebarSections.find((section) => section.title === activeSection)?.items?.[0] || "";
+          setActiveSubsection(nextSub);
+          setOpenSection(activeSection);
+          setIsProjectDesignMode(false);
+          setIsPartsListOpen(false);
+        },
+      });
+    }
 
     if (isProjectDesignMode) {
       items.push({ label: "Editor", onClick: () => {
@@ -1298,6 +1314,9 @@ function App() {
               onOpenProject={(project) => {
                 if (!project?.id) return;
                 startTransition(() => {
+                  setActiveSection("Proyectos");
+                  setActiveSubsection("");
+                  setOpenSection("Proyectos");
                   setActiveProjectId(project.id);
                   setActiveProjectStatus(project.status || "draft");
                   setIsProjectDesignMode(true);
@@ -1384,6 +1403,9 @@ function App() {
               clients={clients}
               onOpenDesigner={(projectId, status, version) => {
                 startTransition(() => {
+                  setActiveSection("Proyectos");
+                  setActiveSubsection("");
+                  setOpenSection("Proyectos");
                   setActiveProjectId(projectId);
                   setActiveProjectStatus(status || "draft");
                   setActiveVersion(version ? { id: version.id, name: version.name, locked: version.locked } : null);

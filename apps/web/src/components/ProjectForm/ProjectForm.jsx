@@ -8,7 +8,7 @@ export default function ProjectForm({
   clients = [],
 }) {
   const [name, setName] = useState('');
-  const [client, setClient] = useState('');
+  const [clientId, setClientId] = useState('');
   const [reference, setReference] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
@@ -18,7 +18,7 @@ export default function ProjectForm({
     if (!clients.length) {
       return [{ value: "", label: "No hay clientes", disabled: true }];
     }
-    return clients.map((item) => ({ value: item.name, label: item.name }));
+    return clients.map((item) => ({ value: item.id, label: item.name }));
   }, [clients]);
 
   const submit = async (e) => {
@@ -29,18 +29,20 @@ export default function ProjectForm({
     }
     setLoading(true);
     try {
+      const selectedClient = clients.find((item) => item.id === clientId) || null;
       const payload = {
         name: name.trim(),
         status: 'draft',
         type: 'plan',
-        client: client.trim() || null,
+        clientId: selectedClient?.id || null,
+        client: selectedClient?.name || null,
         reference: reference.trim() || null,
         address: address.trim() || null,
         notes: notes.trim() || null,
       };
       const created = await onCreate(payload);
       setName('');
-      setClient('');
+      setClientId('');
       setReference('');
       setAddress('');
       setNotes('');
@@ -62,10 +64,10 @@ export default function ProjectForm({
       <label>
         Cliente
         <CustomSelect
-          value={client}
+          value={clientId}
           options={clientOptions}
           placeholder="Selecciona un cliente"
-          onChange={setClient}
+          onChange={setClientId}
           disabled={!clients.length}
         />
       </label>

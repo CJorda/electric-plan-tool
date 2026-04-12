@@ -122,7 +122,9 @@ function BoxModal({
           seenIds.add(id);
           const note = String(entry?.note || "").trim();
           const createdAt = formatTariffDate(entry?.createdAt || entry?.created_at);
-          const price = Number(entry?.discountPrice ?? entry?.distributorPrice) || 0;
+          const shippingCost = Number(entry?.shippingCost ?? entry?.shipping_cost) || 0;
+          const basePrice = Number(entry?.discountPrice ?? entry?.distributorPrice) || 0;
+          const price = Math.round((Math.max(0, basePrice) + Math.max(0, shippingCost) + Number.EPSILON) * 100) / 100;
           const tariffLabel = note || (createdAt ? `Tarifa ${createdAt}` : "Tarifa");
           historyOptions.push({
             value: id,

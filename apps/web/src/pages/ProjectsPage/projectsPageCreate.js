@@ -93,6 +93,12 @@ export async function createProjectRecord({ payload, apiEnabled, authToken }) {
       createdProject: {
         id,
         name: payload.name || 'Proyecto local',
+        type: payload.type || 'plan',
+        client_id: payload.clientId || null,
+        client: payload.client || null,
+        reference: payload.reference || null,
+        address: payload.address || null,
+        notes: payload.notes || null,
         status: payload.status || 'draft',
         createdAt: new Date().toISOString(),
         design: payload.design || null,

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import {
   ensureAuthTables,
   ensureCatalogTables,
+  ensureClientsTable,
   ensureDatabase,
   ensureOperationsTables,
   ensureProjectAttachmentsTable,
@@ -15,6 +16,12 @@ dotenv.config({ path: ".env" });
 const ids = {
   users: {
     admin: "10000000-0000-4000-8000-000000000001",
+  },
+  clients: {
+    logisticaNorte: "11000000-0000-4000-8000-000000000001",
+    grupoDelta: "11000000-0000-4000-8000-000000000002",
+    comunidadSol8: "11000000-0000-4000-8000-000000000003",
+    parkingCentro: "11000000-0000-4000-8000-000000000004",
   },
   providers: {
     electroMax: "20000000-0000-4000-8000-000000000001",
@@ -200,11 +207,29 @@ const createProjectDesign = ({
 };
 
 const ensureProjectColumns = async () => {
+  await ensureClientsTable();
+  await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS client_id UUID");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS client TEXT");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS reference TEXT");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS address TEXT");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS versions JSONB");
   await query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS design JSONB");
+  await query(
+    `DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'projects_client_id_fkey'
+      ) THEN
+        ALTER TABLE projects
+          ADD CONSTRAINT projects_client_id_fkey
+          FOREIGN KEY (client_id)
+          REFERENCES clients(id)
+          ON DELETE SET NULL;
+      END IF;
+    END
+    $$;`
+  );
+  await query("CREATE INDEX IF NOT EXISTS idx_projects_client_id ON projects(client_id)");
 };
 
 const seedUsers = async () => {
@@ -222,6 +247,74 @@ const seedUsers = async () => {
     `,
     [ids.users.admin, "admin@admin.com", passwordHash, "Admin", "admin"]
   );
+};
+
+const seedClients = async () => {
+  const clients = [
+    {
+      id: ids.clients.logisticaNorte,
+      name: "Logistica Norte SL",
+      contactName: "Marta Rios",
+      email: "marta.rios@logisticanorte.local",
+      phone: "+34 611 100 100",
+      address: "Poligono La Vega, Nave 14",
+      notes: "Cliente activo con mantenimientos trimestrales",
+    },
+    {
+      id: ids.clients.grupoDelta,
+      name: "Grupo Delta",
+      contactName: "Carlos Prieto",
+      email: "c.prieto@grupodelta.local",
+      phone: "+34 611 200 200",
+      address: "Av. Europa 120",
+      notes: "Prioridad alta en soporte",
+    },
+    {
+      id: ids.clients.comunidadSol8,
+      name: "Comunidad Sol 8",
+      contactName: "Elena Saez",
+      email: "elena.saez@sol8.local",
+      phone: "+34 611 300 300",
+      address: "Calle Sol 8",
+      notes: "Contacto de administracion de finca",
+    },
+    {
+      id: ids.clients.parkingCentro,
+      name: "Parking Centro SA",
+      contactName: "Raul Herrera",
+      email: "raul.herrera@parkingcentro.local",
+      phone: "+34 611 400 400",
+      address: "Plaza Mayor 2",
+      notes: "Cliente historico con contrato anual",
+    },
+  ];
+
+  for (const client of clients) {
+    await query(
+      `
+        INSERT INTO clients (id, name, contact_name, email, phone, address, notes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (id)
+        DO UPDATE SET
+          name = EXCLUDED.name,
+          contact_name = EXCLUDED.contact_name,
+          email = EXCLUDED.email,
+          phone = EXCLUDED.phone,
+          address = EXCLUDED.address,
+          notes = EXCLUDED.notes,
+          updated_at = NOW()
+      `,
+      [
+        client.id,
+        client.name,
+        client.contactName,
+        client.email,
+        client.phone,
+        client.address,
+        client.notes,
+      ]
+    );
+  }
 };
 
 const seedCatalog = async () => {
@@ -664,6 +757,7 @@ const seedProjects = async () => {
       id: ids.projects.almacenes,
       name: "Almacenes Norte",
       type: "CCTV",
+      clientId: ids.clients.logisticaNorte,
       client: "Logistica Norte SL",
       reference: "AN-2026-001",
       address: "Poligono La Vega, Nave 14",
@@ -721,6 +815,7 @@ const seedProjects = async () => {
       id: ids.projects.oficinas,
       name: "Oficinas Central",
       type: "Control de accesos",
+      clientId: ids.clients.grupoDelta,
       client: "Grupo Delta",
       reference: "OC-2026-014",
       address: "Av. Europa 120",
@@ -760,6 +855,7 @@ const seedProjects = async () => {
       id: ids.projects.residencial,
       name: "Residencial Sol 8",
       type: "Videoportero",
+      clientId: ids.clients.comunidadSol8,
       client: "Comunidad Sol 8",
       reference: "RS8-2026-007",
       address: "Calle Sol 8",
@@ -799,6 +895,7 @@ const seedProjects = async () => {
       id: ids.projects.parking,
       name: "Parking Centro",
       type: "LPR",
+      clientId: ids.clients.parkingCentro,
       client: "Parking Centro SA",
       reference: "PK-2026-022",
       address: "Plaza Mayor 2",
@@ -843,6 +940,7 @@ const seedProjects = async () => {
           id,
           name,
           type,
+          client_id,
           client,
           reference,
           address,
@@ -862,15 +960,17 @@ const seedProjects = async () => {
           $6,
           $7,
           $8,
-          $9::jsonb,
+          $9,
           $10::jsonb,
-          $11,
-          $12
+          $11::jsonb,
+          $12,
+          $13
         )
         ON CONFLICT (id)
         DO UPDATE SET
           name = EXCLUDED.name,
           type = EXCLUDED.type,
+          client_id = EXCLUDED.client_id,
           client = EXCLUDED.client,
           reference = EXCLUDED.reference,
           address = EXCLUDED.address,
@@ -884,6 +984,7 @@ const seedProjects = async () => {
         project.id,
         project.name,
         project.type,
+        project.clientId,
         project.client,
         project.reference,
         project.address,
@@ -1279,6 +1380,7 @@ const getCount = async (tableName) => {
 
 const main = async () => {
   await ensureDatabase();
+  await ensureClientsTable();
   await ensureProjectsTable();
   await ensureProjectAttachmentsTable();
   await ensureCatalogTables();
@@ -1289,6 +1391,7 @@ const main = async () => {
   await query("BEGIN");
   try {
     await seedUsers();
+    await seedClients();
     await seedCatalog();
     await seedProjects();
     await seedOperations();
@@ -1298,13 +1401,13 @@ const main = async () => {
     throw error;
   }
 
-  const [projects, categories, products, providers, clientsLikeProjects, inventory, purchases] =
+  const [projects, categories, products, providers, clients, inventory, purchases] =
     await Promise.all([
       getCount("projects"),
       getCount("categories"),
       getCount("products"),
       getCount("providers"),
-      getCount("projects"),
+      getCount("clients"),
       getCount("inventory_items"),
       getCount("purchase_orders"),
     ]);
@@ -1314,10 +1417,10 @@ const main = async () => {
   console.log(`categories=${categories}`);
   console.log(`products=${products}`);
   console.log(`providers=${providers}`);
+  console.log(`clients=${clients}`);
   console.log(`inventory=${inventory}`);
   console.log(`purchases=${purchases}`);
   console.log(`login=admin@admin.com / admin`);
-  console.log(`clients_hint=${clientsLikeProjects} (clients are seeded in web localStorage)`);
 };
 
 main().catch((error) => {

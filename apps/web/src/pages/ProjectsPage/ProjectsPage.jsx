@@ -321,6 +321,7 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
       const payload = {
         name,
         type: project.type || 'plan',
+        clientId: project.clientId ?? project.client_id ?? null,
         client: project.client ?? null,
         reference: project.reference ?? null,
         address: project.address ?? null,
@@ -480,10 +481,20 @@ function ProjectsPage({ isProjectsSection, searchQuery = '', onOpenDesigner, onP
     // persist to API if enabled
     if (apiEnabled) {
       try {
+        const payload = {
+          name: project.name,
+          type: project.type || 'plan',
+          clientId: project.clientId ?? project.client_id ?? null,
+          client: project.client ?? null,
+          reference: project.reference ?? null,
+          address: project.address ?? null,
+          notes: project.notes ?? null,
+          status,
+        };
         const res = await apiFetch(`/api/projects/${project.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...project, status }),
+          body: JSON.stringify(payload),
         }, authToken);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const updated = await res.json();

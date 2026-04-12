@@ -3,6 +3,8 @@ import CustomSelect from "../../ui/CustomSelect.jsx";
 import DeleteIconButton from "../../ui/DeleteIconButton.jsx";
 import "./CameraModal.css";
 
+const formatCurrency = (value) => `${(Number(value) || 0).toFixed(2)}€`;
+
 function CameraModal({ open, device, catalog, categoryName, onClose, onUpdate, onDelete }) {
   const hasCatalog = catalog.length > 0;
 
@@ -64,7 +66,7 @@ function CameraModal({ open, device, catalog, categoryName, onClose, onUpdate, o
               hasCatalog
                 ? catalog.map((item) => ({
                     value: item.name,
-                    label: `${item.name} (${item.price}€)`,
+                    label: `${item.name} (${formatCurrency(item.price)})`,
                   }))
                 : [{ value: "", label: "Sin modelos", disabled: true }]
             }
